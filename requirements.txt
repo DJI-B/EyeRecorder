@@ -1,0 +1,20 @@
+# EyeRecorder 项目依赖包
+
+# GUI框架
+PyQt5>=5.15.0
+
+# 图像处理
+opencv-python>=4.5.0
+numpy>=1.21.0
+
+# 网络通信
+websockets>=10.0
+
+# 日志和配置
+# 使用Python内置的logging和json模块
+
+# 开发和测试依赖包（可选）
+# pytest>=6.0.0
+# pytest-qt>=4.0.0
+# black>=21.0.0
+# flake8>=3.9.0
