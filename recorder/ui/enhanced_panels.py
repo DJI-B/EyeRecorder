@@ -164,6 +164,11 @@ class ROIPanel(QGroupBox):
         self.preview_label = preview_label
         self.setup_ui()
         self.connect_signals()
+        
+        # 连接预览标签的ROI信号
+        if self.preview_label and hasattr(self.preview_label, 'roi_selected'):
+            self.preview_label.roi_selected.connect(self.update_roi_info)
+            self.preview_label.roi_cleared.connect(self.clear_roi_selection)
     
     def setup_ui(self):
         """设置UI布局"""
@@ -200,6 +205,17 @@ class ROIPanel(QGroupBox):
         roi_buttons_layout.addWidget(self.roi_select_btn)
         roi_buttons_layout.addWidget(self.roi_clear_btn)
         layout.addLayout(roi_buttons_layout)
+        
+        # 添加ROI预览验证按钮
+        verify_layout = QHBoxLayout()
+        
+        self.preview_roi_btn = QPushButton("👁️ 预览ROI")
+        self.preview_roi_btn.setStyleSheet(self._get_verify_button_style())
+        self.preview_roi_btn.setEnabled(False)
+        self.preview_roi_btn.clicked.connect(self.preview_roi_result)
+        
+        verify_layout.addWidget(self.preview_roi_btn)
+        layout.addLayout(verify_layout)
         
         # ROI信息显示
         self.roi_info_label = QLabel("未选择ROI区域")
@@ -260,14 +276,27 @@ ROI启用状态变化"""
             self.preview_label.clear_roi()
         self.roi_info_label.setText("未选择ROI区域")
         self.roi_clear_btn.setEnabled(False)
+        self.preview_roi_btn.setEnabled(False)  # 禁用预览按钮
     
     def update_roi_info(self, roi_rect):
-        """更新ROI信息"""
+        """更新ROI信息 - 添加坐标验证"""
         if roi_rect:
             self.roi_coords = roi_rect
             x, y, w, h = roi_rect
-            self.roi_info_label.setText(f"ROI: {w}×{h} (起点: {x},{y})")
+            
+            # 显示预览坐标
+            self.roi_info_label.setText(f"ROI: {w}×{h} (预览坐标: {x},{y})")
             self.roi_clear_btn.setEnabled(True)
+            self.preview_roi_btn.setEnabled(True)  # 启用预览按钮
+            
+            # 添加调试信息
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"ROI选择: 预览坐标=({x},{y},{w},{h})")
+            
+            # 如果ROI启用状态未开启，自动启用
+            if not self.roi_enabled:
+                self.roi_checkbox.setChecked(True)
     
     def get_roi_settings(self):
         """获取ROI设置"""
@@ -309,6 +338,85 @@ ROI启用状态变化"""
             }
             QPushButton:hover {
                 background-color: #e0a800;
+            }
+            QPushButton:disabled {
+                background-color: #e9ecef;
+                color: #6c757d;
+            }
+        """
+    
+    def preview_roi_result(self):
+        """预览ROI提取结果"""
+        if not self.roi_coords:
+            QMessageBox.warning(self, "⚠️ 提示", "请先选择ROI区域")
+            return
+            
+        # 获取主窗口 - 向上遍历直到找到有current_image的窗口
+        main_window = self
+        while main_window:
+            if hasattr(main_window, 'current_image') and hasattr(main_window, 'get_processing_params'):
+                break
+            main_window = main_window.parent()
+        
+        if not main_window:
+            QMessageBox.warning(self, "⚠️ 提示", "无法找到主窗口")
+            return
+            
+        if not hasattr(main_window, 'current_image') or main_window.current_image is None:
+            QMessageBox.warning(self, "⚠️ 提示", "没有当前图像可供预览")
+            return
+            
+        try:
+            from ..core.image_processor import ImageProcessor
+            params = main_window.get_processing_params()
+            
+            # 添加调试信息
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"预览ROI - ROI坐标: {self.roi_coords}")
+            logger.info(f"预览ROI - 处理参数: {params}")
+            
+            # 使用所见即所得的处理方法
+            processed = ImageProcessor.process_image_pipeline_wysiwyg(
+                main_window.current_image,
+                rotation_angle=params.get('rotation_angle', 0),
+                roi_coords=params.get('roi_coords') if params.get('roi_enabled') else None,
+                target_size=(240, 240),
+                preview_size=params.get('preview_size')
+            )
+            
+            if processed is not None:
+                # 显示ROI预览信息
+                QMessageBox.information(
+                    self, 
+                    "🔍 ROI预览", 
+                    f"ROI区域尺寸: {processed.shape[1]}×{processed.shape[0]} 像素\n"
+                    f"原始坐标: {self.roi_coords}\n"
+                    f"预览尺寸: {params.get('preview_size', '未知')}\n"
+                    f"最终输出: 240×240 像素"
+                )
+            else:
+                QMessageBox.warning(self, "⚠️ 错误", "ROI处理失败")
+                
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"预览ROI时出错: {e}")
+            QMessageBox.warning(self, "⚠️ 错误", f"预览ROI时出错: {e}")
+    
+    def _get_verify_button_style(self):
+        """获取验证按钮样式"""
+        return """
+            QPushButton {
+                background-color: #28a745;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #218838;
             }
             QPushButton:disabled {
                 background-color: #e9ecef;

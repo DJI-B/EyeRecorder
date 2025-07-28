@@ -52,14 +52,14 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
     def initialize_roi_panel_delayed(self):
         """延迟初始化ROI面板"""
         if hasattr(self, 'preview_label') and hasattr(self, 'roi_layout'):
-            self._roi_panel = ROIPanel(self.preview_label)
+            self._roi_panel = ROIPanel(self.preview_label, self)
             self.roi_layout.addWidget(self._roi_panel)
     @property
     def roi_panel(self):
         """延迟创建ROI面板"""
         if not hasattr(self, '_roi_panel') or self._roi_panel is None:
             if hasattr(self, 'preview_label') and hasattr(self, 'roi_layout'):
-                self._roi_panel = ROIPanel(self.preview_label)
+                self._roi_panel = ROIPanel(self.preview_label, self)
                 self.roi_layout.addWidget(self._roi_panel)
             else:
                 return None
@@ -488,22 +488,29 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
             QMessageBox.warning(self, "⚠️ 错误", f"停止录制时出错: {e}")
     
     def get_processing_params(self):
-        """获取处理参数"""
+        """获取处理参数 - ROI坐标已经是基于图像的相对坐标"""
         # 确保面板存在
         if not hasattr(self, '_roi_panel') or self._roi_panel is None:
             roi_settings = {'enabled': False, 'coords': None}
         else:
             roi_settings = self._roi_panel.get_roi_settings()
         
+        # 获取当前预览的实际显示尺寸
+        preview_size = None
+        if hasattr(self, 'preview_label') and self.preview_label.pixmap() is not None:
+            pixmap = self.preview_label.pixmap()
+            preview_size = (pixmap.width(), pixmap.height())
+        
         return {
             'rotation_angle': self.rotation_panel.get_rotation_angle(),
             'roi_enabled': roi_settings['enabled'],
-            'roi_coords': roi_settings['coords'],
+            'roi_coords': roi_settings['coords'],  # 直接使用，无需转换
+            'preview_size': preview_size,  # 添加预览尺寸
             'scale_factor': getattr(self, 'preview_scale_factor', 1.0)
         }
     
     def update_preview(self):
-        """更新预览显示 - 应用旋转效果"""
+        """更新预览显示 - 保持比例，传递图像尺寸信息"""
         if self.current_image is not None:
             try:
                 # 获取当前处理参数
@@ -517,26 +524,38 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
                         processing_params['rotation_angle']
                     )
                 
-                # 转换为Qt格式并显示
+                # 转换为Qt格式
                 height, width, channel = preview_image.shape
                 bytes_per_line = 3 * width
-                q_image = QImage(preview_image.data, width, height, bytes_per_line, QImage.Format_RGB888).rgbSwapped()
+                q_image = QImage(preview_image.data, width, height, 
+                               bytes_per_line, QImage.Format_RGB888).rgbSwapped()
                 
-                # 缩放以适应预览区域
+                # 获取预览区域尺寸
                 preview_size = self.preview_label.size()
+                
+                # 保持宽高比缩放（关键：不填满，保持比例）
                 scaled_pixmap = QPixmap.fromImage(q_image).scaled(
-                    preview_size, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                    preview_size, 
+                    Qt.KeepAspectRatio,  # 保持宽高比
+                    Qt.SmoothTransformation
                 )
+                
+                # 先传递原始图像尺寸给ROI选择器（在setPixmap之前）
+                self.preview_label.original_image_size = (width, height)
+                
+                # 设置pixmap（会触发ROISelector的setPixmap，计算图像区域）
                 self.preview_label.setPixmap(scaled_pixmap)
                 
-                # 更新缩放因子
+                # 计算缩放因子（基于实际显示的图像尺寸）
                 self.preview_scale_factor = min(
-                    preview_size.width() / width,
-                    preview_size.height() / height
+                    scaled_pixmap.width() / width,
+                    scaled_pixmap.height() / height
                 )
                 
                 # 更新分辨率显示
                 self.resolution_label.setText(f"📐 分辨率: {width}×{height}")
+                
+                self.logger.debug(f"预览更新: 旋转角度={processing_params['rotation_angle']}, 尺寸={width}x{height}, 缩放因子={self.preview_scale_factor:.3f}")
                 
             except Exception as e:
                 self.logger.error(f"更新预览失败: {e}")

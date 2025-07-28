@@ -208,35 +208,41 @@ class MultiStageManager(QObject):
             return False
     
     def _process_image_for_saving(self, image, processing_params):
-        """处理图像用于保存"""
+        """处理图像用于保存 - 使用所见即所得方式"""
         try:
             if image is None:
                 self.logger.warning("输入图像为空")
                 return None
             
             self.logger.debug(f"处理图像参数: {processing_params}")
-            self.logger.debug(f"原始图像形状: {image.shape}")
             
-            # 使用ImageProcessor处理图像
-            processed_image = ImageProcessor.process_image_pipeline(
-                image,
-                rotation_angle=processing_params.get('rotation_angle', 0),
-                roi_coords=processing_params.get('roi_coords'),
-                target_size=(240, 240),
-                scale_factor=processing_params.get('scale_factor', 1.0)
-            )
+            # 使用所见即所得的处理方法
+            if processing_params.get('preview_size'):
+                # 有预览尺寸信息，使用所见即所得处理
+                processed_image = ImageProcessor.process_image_pipeline_wysiwyg(
+                    image,
+                    rotation_angle=processing_params.get('rotation_angle', 0),
+                    roi_coords=processing_params.get('roi_coords') if processing_params.get('roi_enabled') else None,
+                    target_size=(240, 240),
+                    preview_size=processing_params.get('preview_size')
+                )
+            else:
+                # 没有预览尺寸信息，使用原来的方法
+                processed_image = ImageProcessor.process_image_pipeline(
+                    image,
+                    rotation_angle=processing_params.get('rotation_angle', 0),
+                    roi_coords=processing_params.get('roi_coords') if processing_params.get('roi_enabled') else None,
+                    target_size=(240, 240),
+                    scale_factor=processing_params.get('scale_factor', 1.0)
+                )
             
             if processed_image is not None:
                 self.logger.debug(f"处理后图像形状: {processed_image.shape}")
-            else:
-                self.logger.warning("图像处理返回空结果")
             
             return processed_image
             
         except Exception as e:
             self.logger.error(f"处理图像失败: {e}")
-            import traceback
-            self.logger.error(f"异常堆栈: {traceback.format_exc()}")
             return None
     
     def _complete_current_stage(self):

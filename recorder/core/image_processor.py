@@ -90,53 +90,97 @@ class ImageProcessor:
     
     @staticmethod
     def process_image_pipeline(image, rotation_angle=0, roi_coords=None, 
-                             target_size=(240, 240), scale_factor=1.0):
+                            target_size=(240, 240), scale_factor=1.0):
         """
-        图像处理流水线 - 修复版
-        
-        Args:
-            image: 输入图像
-            rotation_angle: 旋转角度
-            roi_coords: ROI坐标 (预览坐标系: x, y, w, h)
-            target_size: 目标尺寸 (width, height)
-            scale_factor: 缩放因子（预览到实际图像的比例）
-            
-        Returns:
-            处理后的图像
+        图像处理流水线 - 修复处理顺序版本
+        处理顺序：旋转 → ROI提取 → 尺寸调整（与预览显示一致）
         """
         if image is None:
             return None
             
         processed_image = image.copy()
         
-        # 1. 首先提取ROI区域（在原始图像上操作）
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(f"原始图像尺寸: {processed_image.shape}")
+        
+        # 1. 首先应用旋转（与预览显示顺序一致）
+        if rotation_angle != 0:
+            processed_image = ImageProcessor.rotate_image(processed_image, rotation_angle)
+            logger.debug(f"旋转后尺寸: {processed_image.shape}")
+        
+        # 2. 然后在旋转后的图像上提取ROI
         if roi_coords and scale_factor > 0:
-            # 将预览坐标转换为实际图像坐标
             x, y, w, h = roi_coords
             
-            # 计算实际坐标（逆向缩放）
+            # 将预览坐标转换为旋转后图像的实际坐标
             actual_x = int(x / scale_factor)
             actual_y = int(y / scale_factor)
             actual_w = int(w / scale_factor)
             actual_h = int(h / scale_factor)
             
-            # 确保坐标在有效范围内
+            # 边界检查
             img_height, img_width = processed_image.shape[:2]
             actual_x = max(0, min(actual_x, img_width - 1))
             actual_y = max(0, min(actual_y, img_height - 1))
             actual_w = min(actual_w, img_width - actual_x)
             actual_h = min(actual_h, img_height - actual_y)
             
-            # 只有当ROI有效时才提取
-            if actual_w > 0 and actual_h > 0:
-                actual_roi = (actual_x, actual_y, actual_w, actual_h)
-                processed_image = ImageProcessor.extract_roi(processed_image, actual_roi)
+            logger.debug(f"ROI坐标转换: 预览({x},{y},{w},{h}) → 实际({actual_x},{actual_y},{actual_w},{actual_h})")
+            
+            # 提取ROI
+            if actual_w > 10 and actual_h > 10:
+                processed_image = processed_image[actual_y:actual_y+actual_h, 
+                                                actual_x:actual_x+actual_w]
+                logger.debug(f"ROI提取后尺寸: {processed_image.shape}")
         
-        # 2. 应用旋转（在ROI提取后）
+        # 3. 最后调整到目标尺寸
+        processed_image = ImageProcessor.resize_to_target(processed_image, target_size)
+        logger.debug(f"最终尺寸: {processed_image.shape}")
+        
+        return processed_image
+    
+    @staticmethod
+    def process_image_pipeline_wysiwyg(image, rotation_angle=0, roi_coords=None, 
+                                      target_size=(240, 240), preview_size=None):
+        """
+        所见即所得的图像处理流水线
+        直接基于预览显示的图像进行处理，确保ROI完全一致
+        """
+        if image is None:
+            return None
+        
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # 1. 先旋转图像（与预览一致）
+        processed_image = image.copy()
         if rotation_angle != 0:
             processed_image = ImageProcessor.rotate_image(processed_image, rotation_angle)
         
-        # 3. 调整尺寸到目标大小
+        # 2. 如果有ROI坐标，直接在旋转后的原图上应用ROI
+        # （坐标已经在get_processing_params中进行了转换）
+        if roi_coords:
+            x, y, w, h = roi_coords
+            original_h, original_w = processed_image.shape[:2]
+            
+            logger.debug(f"ROI处理: 旋转后图像尺寸={original_w}x{original_h}, ROI坐标=({x},{y},{w},{h})")
+            
+            # 边界检查
+            x = max(0, min(x, original_w - 1))
+            y = max(0, min(y, original_h - 1))
+            w = min(w, original_w - x)
+            h = min(h, original_h - y)
+            
+            if w > 10 and h > 10:
+                # 直接从旋转后的原图提取ROI
+                roi_image = processed_image[y:y+h, x:x+w]
+                logger.debug(f"ROI提取成功: 实际坐标({x},{y},{w},{h}) -> ROI尺寸{roi_image.shape}")
+                processed_image = roi_image
+            else:
+                logger.warning(f"ROI区域太小: {w}x{h}, 使用原图")
+        
+        # 3. 最后调整到目标尺寸
         processed_image = ImageProcessor.resize_to_target(processed_image, target_size)
         
         return processed_image
