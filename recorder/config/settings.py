@@ -24,7 +24,7 @@ class AppSettings:
             'save_path': os.path.expanduser('~/Pictures/PaperTracker'),
             'auto_save_enabled': True,
             'auto_save_interval': 1000,  # 毫秒
-            'image_quality': 95,
+            'image_quality': 100,
             'rotation_angle': 0,
             'roi_enabled': False,
             'window_geometry': None,
@@ -90,10 +90,10 @@ class AppSettings:
         return {
             'rotation_angle': self.get('rotation_angle', 0),
             'roi_enabled': self.get('roi_enabled', False),
-            'image_quality': self.get('image_quality', 95)
+            'image_quality': self.get('image_quality', 100)
         }
     
-    def set_image_processing_settings(self, rotation_angle=0, roi_enabled=False, quality=95):
+    def set_image_processing_settings(self, rotation_angle=0, roi_enabled=False, quality=100):
         """设置图像处理设置"""
         self.set('rotation_angle', rotation_angle)
         self.set('roi_enabled', roi_enabled)
@@ -133,61 +133,39 @@ class RecordingStageConfig:
     
     @staticmethod
     def get_default_stages():
-        """获取默认录制阶段配置"""
+        """获取眼球数据录制的阶段配置"""
         return [
             {
                 "name": "正常眨眼",
-                "description": "眼睛正常睁开，四处看，并且正常眨眼",
-                "interval_ms": 300,
-                "target_count": 100,
+                "description": "眼睛正常睁开，四处看，自然眨眼",
+                "duration_seconds": 5,  # 录制时长5秒
+                "interval_ms": 300,     # 采集间隔300ms
                 "voice_messages": [
                     "请保持眼睛正常睁开",
-                    "你可以四处看看，正常眨眼",
-                    "请保持自然状态"
+                    "您可以四处看看，正常眨眼",
+                    "保持自然放松的状态"
                 ]
             },
             {
-                "name": "闭眼状态",
-                "description": "闭上眼睛，保持闭眼状态",
-                "interval_ms": 400,
-                "target_count": 80,
+                "name": "半睁眼",
+                "description": "眼睛半睁开，四处看，不要眨眼",
+                "duration_seconds": 5,  # 录制时长5秒
+                "interval_ms": 400,     # 采集间隔400ms
                 "voice_messages": [
-                    "请闭上眼睛",
-                    "保持闭眼状态",
-                    "放松眼部肌肉"
+                    "请将眼睛半睁开",
+                    "保持半睁眼状态，不要眨眼",
+                    "眼球可以四处看"
                 ]
             },
             {
-                "name": "眨眼动作",
-                "description": "做大幅度的眨眼动作",
-                "interval_ms": 250,
-                "target_count": 120,
+                "name": "闭眼放松",
+                "description": "完全闭眼，保持放松状态",
+                "duration_seconds": 5,  # 录制时长5秒
+                "interval_ms": 500,     # 采集间隔500ms
                 "voice_messages": [
-                    "请做大幅度的眨眼动作",
-                    "用力眨眼，再睡开",
-                    "重复眨眼动作"
-                ]
-            },
-            {
-                "name": "眼球转动",
-                "description": "眼球左右上下转动，不要转头",
-                "interval_ms": 350,
-                "target_count": 90,
-                "voice_messages": [
-                    "请眼球左右上下转动",
-                    "不要转动头部，只转动眼球",
-                    "缓慢转动眼球"
-                ]
-            },
-            {
-                "name": "睁着状态",
-                "description": "缓慢睁着，类似想睡觉的状态",
-                "interval_ms": 500,
-                "target_count": 60,
-                "voice_messages": [
-                    "请保持缓慢睁着的状态",
-                    "类似想睡觉时的状态",
-                    "眼睑可以略微下垂"
+                    "请完全闭上眼睛",
+                    "保持放松状态",
+                    "不要用力，自然闭眼即可"
                 ]
             }
         ]
@@ -195,17 +173,17 @@ class RecordingStageConfig:
     @staticmethod
     def validate_stage_config(stage_config):
         """验证阶段配置的有效性"""
-        required_fields = ['name', 'description', 'interval_ms', 'target_count', 'voice_messages']
+        required_fields = ['name', 'description', 'duration_seconds', 'interval_ms', 'voice_messages']
         
         for field in required_fields:
             if field not in stage_config:
                 return False, f"缺少必要字段: {field}"
         
+        if not isinstance(stage_config['duration_seconds'], int) or stage_config['duration_seconds'] <= 0:
+            return False, "duration_seconds 必须是正整数"
+        
         if not isinstance(stage_config['interval_ms'], int) or stage_config['interval_ms'] <= 0:
             return False, "interval_ms 必须是正整数"
-        
-        if not isinstance(stage_config['target_count'], int) or stage_config['target_count'] <= 0:
-            return False, "target_count 必须是正整数"
         
         if not isinstance(stage_config['voice_messages'], list) or len(stage_config['voice_messages']) == 0:
             return False, "voice_messages 必须是非空列表"
@@ -228,7 +206,7 @@ class AppConstants:
     
     # 图像设置
     TARGET_IMAGE_SIZE = (240, 240)
-    DEFAULT_IMAGE_QUALITY = 95
+    DEFAULT_IMAGE_QUALITY = 100
     SUPPORTED_IMAGE_FORMATS = ['.jpg', '.jpeg', '.png', '.bmp']
     
     # 网络设置

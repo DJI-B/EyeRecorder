@@ -624,11 +624,13 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
     # 重写多阶段录制事件处理
     def on_stage_started(self, stage_number, stage_name):
         """阶段开始"""
+        self.recording_status.setText(f"🎬 阶段 {stage_number}/3")
         self.stage_info_label.setText(f"阶段 {stage_number}: {stage_name}")
-        self.recording_status.setText(f"🎭 阶段 {stage_number}")
+        self.logger.info(f"开始阶段 {stage_number}: {stage_name}")
     
     def on_stage_completed(self, stage_number, stage_name):
         """阶段完成"""
+        self.stage_info_label.setText(f"✅ 阶段 {stage_number} 完成: {stage_name}")
         self.logger.info(f"完成阶段 {stage_number}: {stage_name}")
     
     def on_all_stages_completed(self):
@@ -640,7 +642,7 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         self.multi_stage_btn.setEnabled(True)
         self.stop_record_btn.setEnabled(False)
         self.recording_status.setText("✅ 录制完成")
-        self.stage_info_label.setText("🎉 所有阶段完成")
+        self.stage_info_label.setText("🎉 所有阶段完成，数据包已创建")
         
         # 获取会话信息
         session_info = self.multistage_manager.get_session_info()
@@ -652,7 +654,13 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         """语音消息变化"""
         self.stage_info_label.setText(message)
     
-    def on_progress_updated(self, stage, current, total):
+    def on_progress_updated(self, stage, current, progress_percent):
         """进度更新"""
-        progress_text = f"🔴 阶段{stage}: {current}/{total}"
+        progress_text = f"阶段 {stage}: {current}张图像 ({progress_percent}%)"
         self.stage_info_label.setText(progress_text)
+        
+        # 更新图像计数
+        session_info = self.multistage_manager.get_session_info()
+        if session_info:
+            self.recording_count = session_info['count']
+            self.image_count_label.setText(f"{self.recording_count} 张")

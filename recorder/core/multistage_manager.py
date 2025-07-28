@@ -38,9 +38,21 @@ class MultiStageManager(QObject):
         self.session = None
         self.voice_guide = None
         
+        # 添加阶段时间控制
+        self.stage_start_time = None
+        self.last_capture_time = 0
+        
+        # 添加日志记录器
+        import logging
+        self.logger = logging.getLogger(__name__)
+        
         # 定时器
         self.stage_timer = QTimer()
         self.stage_timer.timeout.connect(self._capture_stage_image)
+        
+        # 阶段时长定时器
+        self.stage_duration_timer = QTimer()
+        self.stage_duration_timer.timeout.connect(self._complete_current_stage)
         
         self.duration_timer = QTimer()
         self.session_start_time = None
@@ -77,7 +89,10 @@ class MultiStageManager(QObject):
         """停止多阶段录制"""
         self.is_multi_stage_active = False
         self.is_recording = False
-        # self.stage_timer.stop()  # 已注释掉定时器
+        
+        # 停止所有定时器
+        self.stage_timer.stop()
+        self.stage_duration_timer.stop()
         self.duration_timer.stop()
         
         if self.voice_guide:
@@ -99,7 +114,7 @@ class MultiStageManager(QObject):
         
         # 启动语音引导 (lazy import to avoid circular import)
         from ..ui.voice_guide import VoiceGuide
-        self.voice_guide = VoiceGuide(stage['voice_messages'], countdown_seconds=5)
+        self.voice_guide = VoiceGuide(stage['voice_messages'], countdown_seconds=3)
         self.voice_guide.message_changed.connect(self.voice_message_changed.emit)
         self.voice_guide.countdown_changed.connect(self.countdown_changed.emit)
         self.voice_guide.finished.connect(lambda: self._start_stage_recording(stage_index))
@@ -113,19 +128,27 @@ class MultiStageManager(QObject):
         stage = self.recording_stages[stage_index]
         self.is_recording = True
         self.stage_recording_count = 0
+        self.stage_start_time = time.time()
+        self.last_capture_time = 0
         
-        # 注释掉定时器，改为通过image_received事件触发保存
-        # self.stage_timer.start(stage['interval_ms'])
+        # 启动图像捕获定时器（根据设置的间隔）
+        self.stage_timer.start(stage['interval_ms'])
+        
+        # 启动阶段时长定时器（5秒后自动完成）
+        duration_ms = stage['duration_seconds'] * 1000
+        self.stage_duration_timer.start(duration_ms)
         
         # 发送录制开始信号
         self.recording_started.emit(stage_index + 1)
+        
+        self.logger.info(f"开始阶段 {stage_index + 1} 录制: {stage['name']}, 时长: {stage['duration_seconds']}秒")
     
     def capture_current_image(self):
         """捕获当前图像（由外部调用）"""
         return self._capture_stage_image()
     
     def _capture_stage_image(self):
-        """阶段图像捕获"""
+        """阶段图像捕获（定时器触发）"""
         if not self.is_multi_stage_active or not self.is_recording:
             return
         
@@ -144,41 +167,68 @@ class MultiStageManager(QObject):
         if filepath:
             self.stage_recording_count += 1
             
-            # 更新进度
+            # 更新进度（基于时间进度）
             stage = self.recording_stages[self.current_stage]
-            self.progress_updated.emit(self.current_stage + 1, 
-                                     self.stage_recording_count, 
-                                     stage['target_count'])
+            elapsed_time = time.time() - self.stage_start_time
+            progress_percent = min(100, int((elapsed_time / stage['duration_seconds']) * 100))
             
-            # 检查是否完成当前阶段
-            if self.stage_recording_count >= stage['target_count']:
-                self._complete_current_stage()
+            # 发送进度更新信号
+            self.progress_updated.emit(
+                self.current_stage + 1, 
+                self.stage_recording_count, 
+                progress_percent
+            )
+            
+            self.logger.debug(f"保存第 {self.stage_recording_count} 张图像，进度: {progress_percent}%")
     
     def _complete_current_stage(self):
         """完成当前阶段"""
-        # self.stage_timer.stop()  # 已注释掉定时器
+        # 停止定时器
+        self.stage_timer.stop()
+        self.stage_duration_timer.stop()
         self.is_recording = False
         
         stage = self.recording_stages[self.current_stage]
+        elapsed_time = time.time() - self.stage_start_time if self.stage_start_time else 0
         
         # 发送阶段完成信号
         self.stage_completed.emit(self.current_stage + 1, stage['name'])
         self.recording_stopped.emit(self.current_stage + 1)
         
-        # 短暂延迟后开始下一阶段
-        QTimer.singleShot(2000, lambda: self._start_stage(self.current_stage + 1))
+        self.logger.info(f"完成阶段 {self.current_stage + 1}: {stage['name']}, "
+                        f"用时: {elapsed_time:.1f}秒, 采集: {self.stage_recording_count}张")
+        
+        # 短暂延迟后开始下一阶段（1.5秒过渡时间）
+        QTimer.singleShot(1500, lambda: self._start_stage(self.current_stage + 1))
     
     def _complete_all_stages(self):
         """完成所有阶段"""
         self.is_multi_stage_active = False
         self.is_recording = False
-        # self.stage_timer.stop()  # 已注释掉定时器
+        
+        # 停止所有定时器
+        self.stage_timer.stop()
+        self.stage_duration_timer.stop()
         self.duration_timer.stop()
         
         # 创建汇总报告
         if self.session:
             self.session.create_multi_stage_summary()
             self.session.create_session_report()
+            
+            # 自动创建压缩包
+            zip_path = self.session.create_session_package()
+            if zip_path:
+                self.logger.info(f"数据包已创建: {zip_path}")
+                # 显示成功消息
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.information(
+                    None,
+                    "🎉 录制完成",
+                    f"眼球数据录制已完成！\n\n"
+                    f"数据包已自动创建：\n{zip_path}\n\n"
+                    f"包含 {self.session.recording_count} 张图像"
+                )
         
         # 发送完成信号
         self.all_stages_completed.emit()
@@ -195,13 +245,23 @@ class MultiStageManager(QObject):
             return None
         
         stage = self.recording_stages[self.current_stage]
+        
+        # 计算时间进度
+        elapsed_time = 0
+        progress_percent = 0
+        if self.stage_start_time and self.is_recording:
+            elapsed_time = time.time() - self.stage_start_time
+            progress_percent = min(100, int((elapsed_time / stage['duration_seconds']) * 100))
+        
         return {
             'stage_number': self.current_stage + 1,
             'stage_name': stage['name'],
             'description': stage['description'],
             'current_count': self.stage_recording_count,
-            'target_count': stage['target_count'],
-            'progress': f"{self.stage_recording_count}/{stage['target_count']}",
+            'duration_seconds': stage['duration_seconds'],
+            'elapsed_time': elapsed_time,
+            'progress_percent': progress_percent,
+            'progress': f"{elapsed_time:.1f}s/{stage['duration_seconds']}s ({progress_percent}%)",
             'is_recording': self.is_recording
         }
     

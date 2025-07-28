@@ -72,9 +72,9 @@ class RecordingSession:
             filename = f"img_{timestamp}_{self.recording_count:06d}{suffix}_240x240.jpg"
             filepath = os.path.join(self.current_session_folder, filename)
             
-            # 保存为JPG格式，质量95（高质量）
+            # 保存为JPG格式，质量100（最高质量）
             import cv2
-            cv2.imwrite(filepath, image, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            cv2.imwrite(filepath, image, [cv2.IMWRITE_JPEG_QUALITY, 100])
             
             # 更新计数
             self.recording_count += 1
@@ -222,7 +222,7 @@ class MultiStageSession(RecordingSession):
             
             # 保存图像
             import cv2
-            cv2.imwrite(filepath, image, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            cv2.imwrite(filepath, image, [cv2.IMWRITE_JPEG_QUALITY, 100])
             
             # 更新计数
             self.stage_recording_count += 1
@@ -251,8 +251,8 @@ class MultiStageSession(RecordingSession):
             "stage_name": stage['name'],
             "description": stage['description'],
             "current_count": self.stage_recording_count,
-            "target_count": stage['target_count'],
-            "progress": f"{self.stage_recording_count}/{stage['target_count']}"
+            "duration_seconds": stage.get('duration_seconds', 5),  # 默认5秒
+            "progress": f"{self.stage_recording_count} 张图像"
         }
     
     def create_multi_stage_summary(self):
@@ -283,7 +283,7 @@ class MultiStageSession(RecordingSession):
                         "stage_number": i + 1,
                         "stage_name": stage['name'],
                         "description": stage['description'],
-                        "target_count": stage['target_count'],
+                        "duration_seconds": stage.get('duration_seconds', 5),
                         "actual_count": len(stage_images),
                         "interval_ms": stage['interval_ms'],
                         "folder": f"stage_{i+1}_{stage['name']}"

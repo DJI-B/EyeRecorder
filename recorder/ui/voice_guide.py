@@ -66,7 +66,7 @@ class VoiceGuide(QThread):
                 self.message_changed.emit(message)
                 # 使用系统提示音
                 play_system_beep("info")
-                time.sleep(2)  # 每条消息间隔2秒
+                time.sleep(1.5)  # 缩短到1.5秒，提高效率
             
             # 倒计时
             for i in range(self.countdown_seconds, 0, -1):
@@ -74,7 +74,7 @@ class VoiceGuide(QThread):
                     return
                     
                 self.countdown_changed.emit(i)
-                self.message_changed.emit(f"准备开始录制... {i}")
+                self.message_changed.emit(f"准备录制... {i}")
                 play_system_beep("asterisk")
                 time.sleep(1)
             
