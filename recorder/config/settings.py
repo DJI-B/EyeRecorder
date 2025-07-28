@@ -20,20 +20,18 @@ class AppSettings:
     
     def _init_default_settings(self):
         """初始化默认设置"""
-        # 获取当前脚本的目录作为程序根目录
         import sys
+        
+        # 获取程序根目录 - 使用简化的方法
         if getattr(sys, 'frozen', False):
-            # 如果是打包后的exe
             program_root = os.path.dirname(sys.executable)
         else:
-            # 如果是脚本运行
-            program_root = os.path.dirname(os.path.abspath(__file__))
-            # 向上找到项目根目录（包含main.py的目录）
-            while program_root and not os.path.exists(os.path.join(program_root, 'main.py')):
-                parent = os.path.dirname(program_root)
-                if parent == program_root:  # 到达根目录
-                    break
-                program_root = parent
+            # 直接使用当前工作目录或main.py目录
+            main_file = sys.modules.get('__main__').__file__
+            if main_file:
+                program_root = os.path.dirname(os.path.abspath(main_file))
+            else:
+                program_root = os.getcwd()
         
         default_save_path = os.path.join(program_root, 'saved_images')
         
@@ -95,20 +93,20 @@ class AppSettings:
     
     def get_save_path(self):
         """获取保存路径"""
-        # 获取当前脚本的目录作为程序根目录
         import sys
+        
+        # 获取程序根目录
         if getattr(sys, 'frozen', False):
-            # 如果是打包后的exe
+            # 打包后的exe
             program_root = os.path.dirname(sys.executable)
         else:
-            # 如果是脚本运行
-            program_root = os.path.dirname(os.path.abspath(__file__))
-            # 向上找到项目根目录（包含main.py的目录）
-            while program_root and not os.path.exists(os.path.join(program_root, 'main.py')):
-                parent = os.path.dirname(program_root)
-                if parent == program_root:  # 到达根目录
-                    break
-                program_root = parent
+            # 脚本运行 - 直接使用main.py所在目录
+            main_file = sys.modules.get('__main__').__file__
+            if main_file:
+                program_root = os.path.dirname(os.path.abspath(main_file))
+            else:
+                # 备用方案：使用当前工作目录
+                program_root = os.getcwd()
         
         default_path = os.path.join(program_root, 'saved_images')
         path = self.get('save_path', default_path)
@@ -117,12 +115,15 @@ class AppSettings:
         if not os.path.exists(path):
             try:
                 os.makedirs(path, exist_ok=True)
+                self.logger.info(f"创建保存目录: {path}")
             except Exception as e:
-                print(f"创建保存目录失败: {e}")
+                self.logger.error(f"创建保存目录失败: {e}")
                 path = default_path
                 os.makedirs(path, exist_ok=True)
         
         return path
+        
+
     
     def set_save_path(self, path):
         """设置保存路径"""

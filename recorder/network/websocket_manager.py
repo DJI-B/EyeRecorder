@@ -102,15 +102,11 @@ class WebSocketManager(QObject):
         """断开WebSocket连接"""
         self.is_running = False
         
-        if self.websocket:
-            try:
-                asyncio.create_task(self.websocket.close())
-            except:
-                pass
-            self.websocket = None
-        
+        # 清除状态，websocket将在连接线程中被自动关闭
         self.is_connected_flag = False
         self.current_image = None
+        self.websocket = None
+        
         self.status_updated.emit("已断开连接")
         self.disconnected.emit()
     

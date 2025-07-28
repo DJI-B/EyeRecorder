@@ -165,7 +165,7 @@ class MultiStageManager(QObject):
         
         # 添加最小间隔限制，防止过于频繁保存（可选，如果不需要可以删除）
         current_time = time.time()
-        min_interval = 0.05  # 最小间隔50ms，避免过于频繁保存
+        min_interval = 0.01  # 最小间隔50ms，避免过于频繁保存
         if current_time - self.last_capture_time < min_interval:
             return False
         self.last_capture_time = current_time
@@ -270,6 +270,7 @@ class MultiStageManager(QObject):
     
     def _complete_all_stages(self):
         """完成所有阶段"""
+        import os
         self.is_multi_stage_active = False
         self.is_recording = False
         
@@ -288,27 +289,8 @@ class MultiStageManager(QObject):
             if zip_path:
                 self.logger.info(f"数据包已创建: {zip_path}")
                 
-                # 打开包含压缩包的文件夹
-                import os
-                import subprocess
-                import sys
-                
-                try:
-                    folder_path = os.path.dirname(zip_path)
-                    if sys.platform.startswith('win'):
-                        # Windows: 使用explorer打开文件夹并选中压缩包
-                        subprocess.run(['explorer', '/select,', zip_path], check=False)
-                    elif sys.platform.startswith('darwin'):
-                        # macOS: 使用Finder打开文件夹
-                        subprocess.run(['open', '-R', zip_path], check=False)
-                    elif sys.platform.startswith('linux'):
-                        # Linux: 打开文件夹
-                        subprocess.run(['xdg-open', folder_path], check=False)
-                    
-                    self.logger.info(f"已打开文件夹: {folder_path}")
-                    
-                except Exception as e:
-                    self.logger.warning(f"打开文件夹失败: {e}")
+                # 修复：改进的文件夹打开逻辑
+                self._open_result_folder(zip_path)
                 
                 # 显示成功消息
                 from PyQt5.QtWidgets import QMessageBox
@@ -316,9 +298,9 @@ class MultiStageManager(QObject):
                     None,
                     "🎉 录制完成",
                     f"眼球数据录制已完成！\n\n"
-                    f"数据包已自动创建：\n{zip_path}\n\n"
+                    f"数据包已自动创建：\n{os.path.basename(zip_path)}\n\n"
                     f"包含 {self.session.recording_count} 张图像\n\n"
-                    f"文件夹已自动打开"
+                    f"保存位置：{os.path.dirname(zip_path)}"
                 )
         
         # 发送完成信号
@@ -376,3 +358,44 @@ class MultiStageManager(QObject):
     def set_processing_params_callback(self, callback):
         """设置获取处理参数的回调函数"""
         self.get_processing_params_callback = callback
+    
+    def _open_result_folder(self, zip_path):
+        """打开结果文件夹 - 改进版"""
+        import os
+        import subprocess
+        import sys
+        
+        try:
+            folder_path = os.path.dirname(zip_path)
+            
+            # 确保路径存在
+            if not os.path.exists(folder_path):
+                self.logger.warning(f"文件夹不存在: {folder_path}")
+                return
+            
+            if sys.platform.startswith('win'):
+                # Windows: 使用explorer打开文件夹并选中压缩包
+                subprocess.Popen(['explorer', '/select,', os.path.normpath(zip_path)])
+            elif sys.platform.startswith('darwin'):
+                # macOS: 使用Finder打开文件夹并选中文件
+                subprocess.Popen(['open', '-R', zip_path])
+            elif sys.platform.startswith('linux'):
+                # Linux: 尝试多种文件管理器
+                file_managers = ['nautilus', 'dolphin', 'thunar', 'pcmanfm', 'xdg-open']
+                for fm in file_managers:
+                    try:
+                        if subprocess.call(['which', fm], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
+                            if fm == 'xdg-open':
+                                subprocess.Popen([fm, folder_path])
+                            else:
+                                subprocess.Popen([fm, folder_path])
+                            break
+                    except:
+                        continue
+            else:
+                self.logger.warning(f"不支持的操作系统: {sys.platform}")
+                
+            self.logger.info(f"已尝试打开文件夹: {folder_path}")
+            
+        except Exception as e:
+            self.logger.warning(f"打开文件夹失败: {e}")
