@@ -73,6 +73,12 @@ def main():
     应用程序的入口点
     """
     try:
+        # 创建保存目录
+        import os
+        save_dir = os.path.join(os.path.dirname(__file__), 'saved_images')
+        os.makedirs(save_dir, exist_ok=True)
+        print(f"保存目录已创建: {save_dir}")
+        
         # 初始化应用程序
         app = setup_application()
         

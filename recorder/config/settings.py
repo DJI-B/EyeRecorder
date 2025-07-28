@@ -19,9 +19,13 @@ class AppSettings:
     
     def _init_default_settings(self):
         """初始化默认设置"""
+        # 获取程序根目录路径
+        program_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        default_save_path = os.path.join(program_root, 'saved_images')
+        
         defaults = {
             'websocket_url': 'ws://localhost:8080',
-            'save_path': os.path.expanduser('~/Pictures/PaperTracker'),
+            'save_path': default_save_path,
             'auto_save_enabled': True,
             'auto_save_interval': 1000,  # 毫秒
             'image_quality': 100,
@@ -56,14 +60,17 @@ class AppSettings:
     
     def get_save_path(self):
         """获取保存路径"""
-        default_path = os.path.expanduser('~/Pictures/PaperTracker')
+        # 获取程序根目录路径
+        program_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        default_path = os.path.join(program_root, 'saved_images')
         path = self.get('save_path', default_path)
         
         # 确保目录存在
         if not os.path.exists(path):
             try:
                 os.makedirs(path, exist_ok=True)
-            except:
+            except Exception as e:
+                print(f"创建保存目录失败: {e}")
                 path = default_path
                 os.makedirs(path, exist_ok=True)
         
@@ -202,7 +209,7 @@ class AppConstants:
     APP_DISPLAY_NAME = "📷 PaperTracker 图像录制工具 (增强版)"
     
     # 文件路径
-    DEFAULT_SAVE_PATH = "~/Pictures/PaperTracker"
+    DEFAULT_SAVE_PATH = "./saved_images"
     
     # 图像设置
     TARGET_IMAGE_SIZE = (240, 240)

@@ -32,6 +32,7 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         self.roi_enabled = False
         self.roi_coords = None
         self._roi_panel = None
+        self.temp_session = None  # 临时保存会话
         
         super().__init__()
         
@@ -417,9 +418,14 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         # 调用父类方法更新current_image
         super().on_image_received(image)
         
-        # 检查是否需要保存图像（任何录制模式）
-        if ((hasattr(self, 'recording_session') and self.recording_session) or
-            (hasattr(self, 'multistage_manager') and self.multistage_manager.is_active())):
+        # 添加调试日志
+        if hasattr(self, 'logger'):
+            self.logger.debug(f"接收到图像，尺寸: {image.shape if image is not None else 'None'}")
+        
+        # 如果连接正常且有图像，自动保存（无论是否在录制）
+        if (self.websocket_manager.is_connected() and 
+            image is not None and 
+            hasattr(self, 'save_path')):
             self.save_current_image()
     
     # 事件处理方法
@@ -531,6 +537,9 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         processed_image = self.process_current_image()
         processing_params = self.get_processing_params()
         
+        # 确保有保存路径
+        save_path = self.save_path.text() if hasattr(self, 'save_path') else self.app_settings.get_save_path()
+        
         # 根据录制模式保存图像
         if hasattr(self, 'multistage_manager') and self.multistage_manager.is_active():
             # 多阶段录制模式 - 直接调用多阶段管理器的捕获方法
@@ -541,6 +550,21 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
             if filepath:
                 self.recording_count += 1
                 self.image_count_label.setText(f"{self.recording_count} 张")
+        else:
+            # 即使没有录制会话，也创建临时会话保存
+            if not hasattr(self, 'temp_session') or self.temp_session is None:
+                from ..core.recording_session import RecordingSession
+                user_info = {'username': 'auto', 'email': 'auto@save.com'}
+                self.temp_session = RecordingSession(user_info, save_path, "auto_save")
+            
+            filepath = self.temp_session.save_image(processed_image, processing_params)
+            if filepath:
+                self.recording_count += 1
+                if hasattr(self, 'image_count_label'):
+                    self.image_count_label.setText(f"{self.recording_count} 张")
+                if hasattr(self, 'logger'):
+                    self.logger.info(f"自动保存图像: {filepath}")
+                print(f"图像已保存到: {filepath}")
     
     def process_current_image(self):
         """处理当前图像"""
