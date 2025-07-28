@@ -46,10 +46,10 @@ class WebSocketManager(QObject):
         self.image_count = 0
         self.last_image_time = 0
         
-        # 重连参数
+        # 重连参数 - 关闭所有超时
         self.reconnect_attempts = 0
-        self.max_reconnect_attempts = 5
-        self.reconnect_delay = 3  # 秒
+        self.max_reconnect_attempts = float('inf')  # 无限重连
+        self.reconnect_delay = 0  # 无延迟重连
     
     def set_url(self, url: str):
         """设置WebSocket URL"""
@@ -149,7 +149,10 @@ class WebSocketManager(QObject):
                 async with websockets.connect(
                     current_url,
                     max_size=None,
-                    max_queue=None
+                    max_queue=None,
+                    ping_interval=None,  # 禁用ping
+                    ping_timeout=None,   # 禁用ping超时
+                    close_timeout=None   # 禁用关闭超时
                 ) as websocket:
                     self.websocket = websocket
                     self.is_connected_flag = True
@@ -172,9 +175,11 @@ class WebSocketManager(QObject):
                 self.is_connected_flag = False
                 self.websocket = None
                 
-            # 如果需要重连
+            # 如果需要重连 - 无延迟立即重连
             if self.is_running and self._should_reconnect():
-                await asyncio.sleep(self.reconnect_delay)
+                if self.reconnect_delay > 0:
+                    await asyncio.sleep(self.reconnect_delay)
+                # 否则立即重连，无延迟
             else:
                 break
     

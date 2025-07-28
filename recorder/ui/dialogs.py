@@ -17,33 +17,30 @@ class UserInfoDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("📝 用户信息设置")
-        self.setFixedSize(450, 280)
+        self.setFixedSize(540, 350)  # 增加高度
         self.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint)
         self.setup_ui()
         
     def setup_ui(self):
         """设置对话框界面"""
         layout = QVBoxLayout()
-        layout.setSpacing(15)
+        layout.setSpacing(20)  # 增加元素间距
         
         # 标题
         title = QLabel("🎯 首次使用需要设置用户信息")
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet("""
-            QLabel {
-                font-size: 14pt;
-                font-weight: bold;
-                color: #495057;
-                margin: 15px;
-                padding: 10px;
-                background-color: #f8f9fa;
-                border-radius: 8px;
-            }
+                QLabel { 
+            font-size: 12pt; 
+            font-weight: 600; 
+            color: #495057; 
+            margin-bottom: 5px;
+        }
         """)
         layout.addWidget(title)
         
         # 用户名输入
-        username_label = QLabel("👤 用户名:")
+        username_label = QLabel("👤 用户名:")  # 确保使用标准的emoji和文字
         username_label.setStyleSheet("QLabel { font-size: 11pt; font-weight: 600; color: #495057; }")
         layout.addWidget(username_label)
         
@@ -52,8 +49,11 @@ class UserInfoDialog(QDialog):
         self.username_input.setStyleSheet(self.get_input_style())
         layout.addWidget(self.username_input)
         
+        # 在邮箱标签前添加额外间距
+        layout.addSpacing(10)
+        
         # 邮箱输入
-        email_label = QLabel("📧 邮箱:")
+        email_label = QLabel("📧 邮箱:")  # 确保使用标准的emoji和文字
         email_label.setStyleSheet("QLabel { font-size: 11pt; font-weight: 600; color: #495057; }")
         layout.addWidget(email_label)
         
@@ -61,6 +61,9 @@ class UserInfoDialog(QDialog):
         self.email_input.setPlaceholderText("请输入您的邮箱地址")
         self.email_input.setStyleSheet(self.get_input_style())
         layout.addWidget(self.email_input)
+        
+        # 在按钮前添加额外间距
+        layout.addSpacing(15)
         
         # 按钮
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
