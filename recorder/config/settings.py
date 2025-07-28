@@ -1,6 +1,7 @@
 """
-配置设置模块
+配置设置模块 - 修复版
 管理应用程序的各种配置和设置
+修复了保存路径问题
 """
 
 import os
@@ -9,7 +10,7 @@ from PyQt5.QtCore import QSettings
 
 class AppSettings:
     """
-    应用设置管理器
+    应用设置管理器 - 修复版
     负责管理用户配置和应用设置
     """
     
@@ -19,8 +20,21 @@ class AppSettings:
     
     def _init_default_settings(self):
         """初始化默认设置"""
-        # 获取程序根目录路径
-        program_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        # 获取当前脚本的目录作为程序根目录
+        import sys
+        if getattr(sys, 'frozen', False):
+            # 如果是打包后的exe
+            program_root = os.path.dirname(sys.executable)
+        else:
+            # 如果是脚本运行
+            program_root = os.path.dirname(os.path.abspath(__file__))
+            # 向上找到项目根目录（包含main.py的目录）
+            while program_root and not os.path.exists(os.path.join(program_root, 'main.py')):
+                parent = os.path.dirname(program_root)
+                if parent == program_root:  # 到达根目录
+                    break
+                program_root = parent
+        
         default_save_path = os.path.join(program_root, 'saved_images')
         
         defaults = {
@@ -60,8 +74,21 @@ class AppSettings:
     
     def get_save_path(self):
         """获取保存路径"""
-        # 获取程序根目录路径
-        program_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        # 获取当前脚本的目录作为程序根目录
+        import sys
+        if getattr(sys, 'frozen', False):
+            # 如果是打包后的exe
+            program_root = os.path.dirname(sys.executable)
+        else:
+            # 如果是脚本运行
+            program_root = os.path.dirname(os.path.abspath(__file__))
+            # 向上找到项目根目录（包含main.py的目录）
+            while program_root and not os.path.exists(os.path.join(program_root, 'main.py')):
+                parent = os.path.dirname(program_root)
+                if parent == program_root:  # 到达根目录
+                    break
+                program_root = parent
+        
         default_path = os.path.join(program_root, 'saved_images')
         path = self.get('save_path', default_path)
         
@@ -134,7 +161,7 @@ class AppSettings:
 
 class RecordingStageConfig:
     """
-    录制阶段配置
+    录制阶段配置 - 修复版
     定义多阶段录制的各个阶段配置
     """
     
@@ -143,10 +170,11 @@ class RecordingStageConfig:
         """获取眼球数据录制的阶段配置"""
         return [
             {
-                "name": "正常眨眼",
+                "name": "normal_blink",  # 使用英文名避免路径问题
+                "display_name": "正常眨眼",  # 显示用的中文名
                 "description": "眼睛正常睁开，四处看，自然眨眼",
                 "duration_seconds": 5,  # 录制时长5秒
-                "interval_ms": 300,     # 采集间隔300ms
+                "interval_ms": 200,     # 采集间隔200ms，提高频率
                 "voice_messages": [
                     "请保持眼睛正常睁开",
                     "您可以四处看看，正常眨眼",
@@ -154,10 +182,11 @@ class RecordingStageConfig:
                 ]
             },
             {
-                "name": "半睁眼",
+                "name": "half_open",
+                "display_name": "半睁眼",
                 "description": "眼睛半睁开，四处看，不要眨眼",
                 "duration_seconds": 5,  # 录制时长5秒
-                "interval_ms": 400,     # 采集间隔400ms
+                "interval_ms": 200,     # 采集间隔200ms
                 "voice_messages": [
                     "请将眼睛半睁开",
                     "保持半睁眼状态，不要眨眼",
@@ -165,10 +194,11 @@ class RecordingStageConfig:
                 ]
             },
             {
-                "name": "闭眼放松",
+                "name": "closed_relax",
+                "display_name": "闭眼放松",
                 "description": "完全闭眼，保持放松状态",
                 "duration_seconds": 5,  # 录制时长5秒
-                "interval_ms": 500,     # 采集间隔500ms
+                "interval_ms": 200,     # 采集间隔200ms
                 "voice_messages": [
                     "请完全闭上眼睛",
                     "保持放松状态",

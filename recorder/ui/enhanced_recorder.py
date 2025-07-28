@@ -1,6 +1,6 @@
 """
-增强版录制器实现
-基于模块化组件的完整录制器实现
+增强版录制器实现 - 修复版
+基于模块化组件的完整录制器实现，仅支持多阶段录制
 """
 
 import time
@@ -17,13 +17,12 @@ from .main_window import BaseRecorderWindow
 from .enhanced_panels import RotationPanel, ROIPanel
 from .components import ModernButton
 from ..core.image_processor import ImageProcessor
-from ..core.recording_session import RecordingSession
 
 
 class EnhancedRecorderWindow(BaseRecorderWindow):
     """
     增强版录制器窗口
-    包含旋转、ROI、多阶段录制等增强功能
+    仅支持多阶段录制，包含旋转、ROI等增强功能
     """
     
     def __init__(self):
@@ -32,7 +31,6 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         self.roi_enabled = False
         self.roi_coords = None
         self._roi_panel = None
-        self.temp_session = None  # 临时保存会话
         
         super().__init__()
         
@@ -103,7 +101,7 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         layout = QVBoxLayout()
         
         # 主标题
-        title = QLabel("📷 PaperTracker 图像录制工具")
+        title = QLabel("📷 PaperTracker 眼球数据录制工具")
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet("""
             QLabel {
@@ -121,7 +119,7 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         layout.addWidget(title)
         
         # 副标题
-        subtitle = QLabel("增强版 v3.1.0 - 专为小白用户设计")
+        subtitle = QLabel("多阶段眼球录制 v3.1.0 - 专为研究设计")
         subtitle.setAlignment(Qt.AlignCenter)
         subtitle.setStyleSheet("""
             QLabel {
@@ -166,7 +164,7 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         
         # 基础功能选项卡
         basic_tab = self.create_basic_tab()
-        tab_widget.addTab(basic_tab, "🎯 基础功能")
+        tab_widget.addTab(basic_tab, "🎯 录制控制")
         
         # 图像处理选项卡
         processing_tab = self.create_processing_tab()
@@ -188,7 +186,7 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         connection_group = self.create_connection_group()
         layout.addWidget(connection_group)
         
-        # 录制控制组
+        # 录制控制组 - 仅多阶段录制
         control_group = self.create_recording_control_group()
         layout.addWidget(control_group)
         
@@ -223,9 +221,9 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         layout = QVBoxLayout(tab)
         layout.setSpacing(15)
         
-        # 自动保存设置组
-        auto_save_group = self.create_auto_save_group()
-        layout.addWidget(auto_save_group)
+        # 保存设置组
+        save_group = self.create_save_group()
+        layout.addWidget(save_group)
         
         layout.addStretch()
         return tab
@@ -276,45 +274,35 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         return group
     
     def create_recording_control_group(self) -> QGroupBox:
-        """创建录制控制组"""
-        group = QGroupBox("🎬 录制控制")
+        """创建录制控制组 - 仅多阶段录制"""
+        group = QGroupBox("🎭 多阶段眼球录制")
         layout = QVBoxLayout()
         
-        # 录制模式选择
-        mode_layout = QHBoxLayout()
-        mode_label = QLabel("录制模式:")
-        mode_label.setStyleSheet("font-weight: 600;")
-        mode_layout.addWidget(mode_label)
-        
-        self.mode_group = QButtonGroup()
-        
-        self.single_mode_radio = QRadioButton("单次录制")
-        self.single_mode_radio.setChecked(True)
-        self.mode_group.addButton(self.single_mode_radio, 0)
-        mode_layout.addWidget(self.single_mode_radio)
-        
-        self.multi_stage_radio = QRadioButton("多阶段录制")
-        self.mode_group.addButton(self.multi_stage_radio, 1)
-        mode_layout.addWidget(self.multi_stage_radio)
-        
-        mode_layout.addStretch()
-        layout.addLayout(mode_layout)
+        # 录制说明
+        info_label = QLabel("📋 录制流程：正常眨眼 → 半睁眼 → 闭眼放松")
+        info_label.setStyleSheet("""
+            QLabel {
+                background-color: #e3f2fd;
+                padding: 10px;
+                border-radius: 6px;
+                color: #1565c0;
+                font-weight: 600;
+                border: 1px solid #bbdefb;
+            }
+        """)
+        layout.addWidget(info_label)
         
         # 录制按钮
         button_layout = QHBoxLayout()
         
-        self.single_record_btn = ModernButton("📷 开始录制", "primary")
-        self.single_record_btn.clicked.connect(self.start_single_recording)
-        button_layout.addWidget(self.single_record_btn)
-        
-        self.multi_stage_btn = ModernButton("🎭 多阶段录制", "primary")
-        self.multi_stage_btn.clicked.connect(self.start_multi_stage_recording)
-        button_layout.addWidget(self.multi_stage_btn)
+        self.start_recording_btn = ModernButton("🎬 开始眼球录制", "primary")
+        self.start_recording_btn.clicked.connect(self.start_multi_stage_recording)
+        button_layout.addWidget(self.start_recording_btn)
         
         # 停止录制按钮
         self.stop_record_btn = ModernButton("⏹️ 停止录制", "danger")
         self.stop_record_btn.clicked.connect(self.stop_recording)
-        self.stop_record_btn.setEnabled(False)  # 初始状态为禁用
+        self.stop_record_btn.setEnabled(False)
         button_layout.addWidget(self.stop_record_btn)
         
         layout.addLayout(button_layout)
@@ -345,7 +333,7 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         self.duration_label.setStyleSheet("font-weight: 600; color: #007bff;")
         layout.addWidget(self.duration_label, 2, 1)
         
-        # 阶段信息（多阶段录制时显示）
+        # 阶段信息
         layout.addWidget(QLabel("阶段信息:"), 3, 0)
         self.stage_info_label = QLabel("未开始")
         self.stage_info_label.setStyleSheet("font-weight: 600; color: #6c757d;")
@@ -354,7 +342,7 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         group.setLayout(layout)
         return group
     
-    def create_auto_save_group(self) -> QGroupBox:
+    def create_save_group(self) -> QGroupBox:
         """创建保存设置组"""
         group = QGroupBox("💾 保存设置")
         layout = QVBoxLayout()
@@ -396,8 +384,8 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         
         layout.addLayout(path_layout)
         
-        # 保存频率说明
-        info_label = QLabel("📌 图像将在解码后立即保存")
+        # 保存格式信息
+        info_label = QLabel("📌 图像自动保存为 240×240 像素的高质量 JPG 格式")
         info_label.setStyleSheet("""
             QLabel {
                 color: #28a745;
@@ -421,14 +409,7 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         # 添加调试日志
         if hasattr(self, 'logger'):
             self.logger.debug(f"接收到图像，尺寸: {image.shape if image is not None else 'None'}")
-        
-        # 只在录制状态下保存图像，移除自动保存
-        if self.is_recording_active():
-            self.save_current_image()
-    def is_recording_active(self):
-        """检查是否正在录制"""
-        return (self.recording_session is not None or 
-                (hasattr(self, 'multistage_manager') and self.multistage_manager.is_active()))
+    
     # 事件处理方法
     def connect_device(self):
         """连接设备"""
@@ -459,34 +440,6 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
             self.save_path.setText(path)
             self.app_settings.set_save_path(path)
     
-    def start_single_recording(self):
-        """开始单次录制"""
-        if not self.websocket_manager.is_connected():
-            QMessageBox.warning(self, "⚠️ 警告", "请先连接设备！")
-            return
-        
-        # 创建录制会话
-        self.recording_session = RecordingSession(
-            self.user_info, 
-            self.save_path.text(),
-            "single"
-        )
-        
-        # 重置计数器
-        self.recording_count = 0
-        
-        # 开始录制
-        self.session_start_time = time.time()
-        self.duration_timer.start(1000)
-        self.recording_status.setText("🔴 正在录制")
-        
-        # 更新按钮状态
-        self.single_record_btn.setEnabled(False)
-        self.multi_stage_btn.setEnabled(False)
-        self.stop_record_btn.setEnabled(True)
-        
-        self.logger.info("单次录制已开始")
-    
     def start_multi_stage_recording(self):
         """开始多阶段录制"""
         success = self.multistage_manager.start_multi_stage_recording(
@@ -498,9 +451,9 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         if success:
             self.session_start_time = time.time()
             self.duration_timer.start(1000)
-            self.single_record_btn.setEnabled(False)
-            self.multi_stage_btn.setEnabled(False)
+            self.start_recording_btn.setEnabled(False)
             self.stop_record_btn.setEnabled(True)
+            self.recording_count = 0  # 重置计数
     
     def stop_recording(self):
         """停止录制"""
@@ -513,30 +466,15 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
             if hasattr(self, 'multistage_manager') and self.multistage_manager:
                 self.multistage_manager.stop_multi_stage_recording()
             
-            # 如果是单次录制，创建报告和数据包
-            if self.recording_session:
-                self.recording_session.create_session_report()
-                zip_path = self.recording_session.create_session_package()
-                if zip_path:
-                    QMessageBox.information(
-                        self,
-                        "🎉 录制完成",
-                        f"单次录制已完成！\n\n"
-                        f"数据包已创建：\n{zip_path}\n\n"
-                        f"包含 {self.recording_count} 张图像"
-                    )
-            
             # 重置状态
             self.recording_status.setText("⏹️ 已停止")
             self.stage_info_label.setText("录制已停止")
             
             # 恢复按钮状态
-            self.single_record_btn.setEnabled(True)
-            self.multi_stage_btn.setEnabled(True)
+            self.start_recording_btn.setEnabled(True)
             self.stop_record_btn.setEnabled(False)
             
             # 清理会话
-            self.recording_session = None
             self.session_start_time = None
             
             self.logger.info("录制已停止")
@@ -544,48 +482,6 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         except Exception as e:
             self.logger.error(f"停止录制时出错: {e}")
             QMessageBox.warning(self, "⚠️ 错误", f"停止录制时出错: {e}")
-    
-    def save_current_image(self):
-        """保存当前图像"""
-        # 检查基本条件
-        if self.current_image is None:
-            return
-        
-        # 处理图像
-        processed_image = self.process_current_image()
-        processing_params = self.get_processing_params()
-        
-        # 根据录制模式保存图像
-        if hasattr(self, 'multistage_manager') and self.multistage_manager.is_active():
-            # 多阶段录制模式 - 让多阶段管理器处理
-            # 这里不需要手动调用，因为多阶段管理器有自己的定时器
-            pass
-        elif self.recording_session:
-            # 单次录制模式
-            filepath = self.recording_session.save_image(processed_image, processing_params)
-            if filepath:
-                self.recording_count += 1
-                self.image_count_label.setText(f"{self.recording_count} 张")
-                self.logger.info(f"保存图像: {filepath}")
-    
-    def process_current_image(self):
-        """处理当前图像"""
-        if self.current_image is None:
-            return None
-        
-        roi_coords = None
-        if self.roi_panel:
-            roi_settings = self.roi_panel.get_roi_settings()
-            if roi_settings['enabled']:
-                roi_coords = roi_settings['coords']
-        
-        return ImageProcessor.process_image_pipeline(
-            self.current_image,
-            self.rotation_panel.get_rotation_angle(),
-            roi_coords,
-            (240, 240),  # 目标尺寸
-            self.preview_scale_factor
-        )
     
     def get_processing_params(self):
         """获取处理参数"""
@@ -597,16 +493,11 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         }
     
     def update_preview(self):
-        """更新预览显示"""
+        """更新预览显示 - 修复旋转显示问题"""
         if self.current_image is not None:
             try:
-                # 处理图像用于预览
+                # 使用原始图像进行预览，不应用任何处理
                 preview_image = self.current_image.copy()
-                
-                # 应用旋转（仅用于预览）
-                rotation_angle = self.rotation_panel.get_rotation_angle()
-                if rotation_angle != 0:
-                    preview_image = ImageProcessor.rotate_image(preview_image, rotation_angle)
                 
                 # 转换为Qt格式并显示
                 height, width, channel = preview_image.shape
@@ -647,7 +538,7 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
             seconds = duration % 60
             self.duration_label.setText(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
     
-    # 重写多阶段录制事件处理
+    # 多阶段录制事件处理
     def on_stage_started(self, stage_number, stage_name):
         """阶段开始"""
         self.recording_status.setText(f"🎬 阶段 {stage_number}/3")
@@ -664,8 +555,7 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         super().on_all_stages_completed()
         
         # 重置控件状态
-        self.single_record_btn.setEnabled(True)
-        self.multi_stage_btn.setEnabled(True)
+        self.start_recording_btn.setEnabled(True)
         self.stop_record_btn.setEnabled(False)
         self.recording_status.setText("✅ 录制完成")
         self.stage_info_label.setText("🎉 所有阶段完成，数据包已创建")

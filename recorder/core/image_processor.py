@@ -1,6 +1,7 @@
 """
-图像处理核心模块
+图像处理核心模块 - 修复版
 处理图像旋转、ROI提取、尺寸调整等功能
+修复了ROI坐标转换和旋转处理问题
 """
 
 import cv2
@@ -9,14 +10,14 @@ import numpy as np
 
 class ImageProcessor:
     """
-图像处理器
-负责各种图像处理操作
-"""
+    图像处理器
+    负责各种图像处理操作
+    """
     
     @staticmethod
     def rotate_image(image, angle):
         """
-旋转图像
+        旋转图像
         
         Args:
             image: 输入图像
@@ -53,7 +54,7 @@ class ImageProcessor:
     @staticmethod
     def extract_roi(image, roi_rect):
         """
-提取ROI区域
+        提取ROI区域
         
         Args:
             image: 输入图像
@@ -82,7 +83,7 @@ class ImageProcessor:
     @staticmethod
     def resize_to_target(image, target_size=(240, 240)):
         """
-调整图像尺寸到目标尺寸
+        调整图像尺寸到目标尺寸
         
         Args:
             image: 输入图像
@@ -97,39 +98,51 @@ class ImageProcessor:
     def process_image_pipeline(image, rotation_angle=0, roi_coords=None, 
                              target_size=(240, 240), scale_factor=1.0):
         """
-图像处理流水线
+        图像处理流水线 - 修复版
         
         Args:
             image: 输入图像
             rotation_angle: 旋转角度
-            roi_coords: ROI坐标
-            target_size: 目标尺寸
-            scale_factor: 缩放因子（用于坐标转换）
+            roi_coords: ROI坐标 (预览坐标系: x, y, w, h)
+            target_size: 目标尺寸 (width, height)
+            scale_factor: 缩放因子（预览到实际图像的比例）
             
         Returns:
             处理后的图像
         """
+        if image is None:
+            return None
+            
         processed_image = image.copy()
         
-        # 1. 应用旋转
+        # 1. 首先提取ROI区域（在原始图像上操作）
+        if roi_coords and scale_factor > 0:
+            # 将预览坐标转换为实际图像坐标
+            x, y, w, h = roi_coords
+            
+            # 计算实际坐标（逆向缩放）
+            actual_x = int(x / scale_factor)
+            actual_y = int(y / scale_factor)
+            actual_w = int(w / scale_factor)
+            actual_h = int(h / scale_factor)
+            
+            # 确保坐标在有效范围内
+            img_height, img_width = processed_image.shape[:2]
+            actual_x = max(0, min(actual_x, img_width - 1))
+            actual_y = max(0, min(actual_y, img_height - 1))
+            actual_w = min(actual_w, img_width - actual_x)
+            actual_h = min(actual_h, img_height - actual_y)
+            
+            # 只有当ROI有效时才提取
+            if actual_w > 0 and actual_h > 0:
+                actual_roi = (actual_x, actual_y, actual_w, actual_h)
+                processed_image = ImageProcessor.extract_roi(processed_image, actual_roi)
+        
+        # 2. 应用旋转（在ROI提取后）
         if rotation_angle != 0:
             processed_image = ImageProcessor.rotate_image(processed_image, rotation_angle)
         
-        # 2. 提取ROI区域
-        if roi_coords:
-            # 将预览坐标转换为实际图像坐标
-            if scale_factor > 0:
-                x, y, w, h = roi_coords
-                scale = 1.0 / scale_factor
-                actual_roi = (
-                    int(x * scale),
-                    int(y * scale),
-                    int(w * scale),
-                    int(h * scale)
-                )
-                processed_image = ImageProcessor.extract_roi(processed_image, actual_roi)
-        
-        # 3. 调整尺寸
+        # 3. 调整尺寸到目标大小
         processed_image = ImageProcessor.resize_to_target(processed_image, target_size)
         
         return processed_image

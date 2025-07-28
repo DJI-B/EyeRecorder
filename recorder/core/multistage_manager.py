@@ -1,6 +1,7 @@
 """
-多阶段录制管理模块
+多阶段录制管理模块 - 修复版
 管理多阶段录制的流程控制和状态管理
+修复了图像保存问题
 """
 
 import time
@@ -10,6 +11,7 @@ from PyQt5.QtWidgets import QMessageBox
 
 from ..config.settings import RecordingStageConfig
 from .recording_session import MultiStageSession
+from .image_processor import ImageProcessor
 
 
 class MultiStageManager(QObject):
@@ -37,6 +39,8 @@ class MultiStageManager(QObject):
         self.is_multi_stage_active = False
         self.session = None
         self.voice_guide = None
+        self.websocket_client = None
+        self.get_processing_params_callback = None
         
         # 添加阶段时间控制
         self.stage_start_time = None
@@ -67,6 +71,9 @@ class MultiStageManager(QObject):
             QMessageBox.warning(None, "⚠️ 警告", "请先连接设备！")
             return False
         
+        # 保存WebSocket客户端引用
+        self.websocket_client = websocket_client
+        
         # 初始化会话
         self.session = MultiStageSession(user_info, save_path, self.recording_stages)
         if not self.session.current_session_folder:
@@ -78,7 +85,6 @@ class MultiStageManager(QObject):
         self.current_stage = 0
         self.stage_recording_count = 0
         self.session_start_time = time.time()
-        self.websocket_client = websocket_client
         
         # 开始第一个阶段
         self._start_stage(0)
@@ -110,7 +116,8 @@ class MultiStageManager(QObject):
         self.stage_recording_count = 0
         
         # 发送阶段开始信号
-        self.stage_started.emit(stage_index + 1, stage['name'])
+        display_name = stage.get('display_name', stage['name'])
+        self.stage_started.emit(stage_index + 1, display_name)
         
         # 启动语音引导 (lazy import to avoid circular import)
         from ..ui.voice_guide import VoiceGuide
@@ -141,45 +148,96 @@ class MultiStageManager(QObject):
         # 发送录制开始信号
         self.recording_started.emit(stage_index + 1)
         
-        self.logger.info(f"开始阶段 {stage_index + 1} 录制: {stage['name']}, 时长: {stage['duration_seconds']}秒")
+        self.logger.info(f"开始阶段 {stage_index + 1} 录制: {stage.get('display_name', stage['name'])}, 时长: {stage['duration_seconds']}秒")
     
     def capture_current_image(self):
         """捕获当前图像（由外部调用）"""
         return self._capture_stage_image()
     
     def _capture_stage_image(self):
-        """阶段图像捕获（定时器触发）"""
+        """阶段图像捕获（定时器触发）- 修复版"""
         if not self.is_multi_stage_active or not self.is_recording:
-            return
+            return False
         
         if not self.websocket_client:
-            return
+            self.logger.warning("WebSocket客户端不可用")
+            return False
         
         # 获取当前图像
         current_image = self.websocket_client.get_current_image()
         if current_image is None:
-            return
+            self.logger.debug("当前没有可用图像")
+            return False
         
-        # 保存阶段图像
-        processing_params = self._get_processing_params()
-        filepath = self.session.save_stage_image(current_image, processing_params)
-        
-        if filepath:
-            self.stage_recording_count += 1
+        try:
+            # 获取处理参数
+            processing_params = self._get_processing_params()
             
-            # 更新进度（基于时间进度）
-            stage = self.recording_stages[self.current_stage]
-            elapsed_time = time.time() - self.stage_start_time
-            progress_percent = min(100, int((elapsed_time / stage['duration_seconds']) * 100))
+            # 处理图像
+            processed_image = self._process_image_for_saving(current_image, processing_params)
+            if processed_image is None:
+                self.logger.warning("图像处理失败")
+                return False
             
-            # 发送进度更新信号
-            self.progress_updated.emit(
-                self.current_stage + 1, 
-                self.stage_recording_count, 
-                progress_percent
+            # 保存阶段图像
+            filepath = self.session.save_stage_image(processed_image, processing_params)
+            
+            if filepath:
+                self.stage_recording_count += 1
+                
+                # 更新进度（基于时间进度）
+                stage = self.recording_stages[self.current_stage]
+                elapsed_time = time.time() - self.stage_start_time
+                progress_percent = min(100, int((elapsed_time / stage['duration_seconds']) * 100))
+                
+                # 发送进度更新信号
+                self.progress_updated.emit(
+                    self.current_stage + 1, 
+                    self.stage_recording_count, 
+                    progress_percent
+                )
+                
+                self.logger.debug(f"保存第 {self.stage_recording_count} 张图像，文件: {filepath}")
+                return True
+            else:
+                self.logger.warning("图像保存失败")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"捕获阶段图像时出错: {e}")
+            return False
+    
+    def _process_image_for_saving(self, image, processing_params):
+        """处理图像用于保存"""
+        try:
+            if image is None:
+                self.logger.warning("输入图像为空")
+                return None
+            
+            self.logger.debug(f"处理图像参数: {processing_params}")
+            self.logger.debug(f"原始图像形状: {image.shape}")
+            
+            # 使用ImageProcessor处理图像
+            processed_image = ImageProcessor.process_image_pipeline(
+                image,
+                rotation_angle=processing_params.get('rotation_angle', 0),
+                roi_coords=processing_params.get('roi_coords'),
+                target_size=(240, 240),
+                scale_factor=processing_params.get('scale_factor', 1.0)
             )
             
-            self.logger.debug(f"保存第 {self.stage_recording_count} 张图像，进度: {progress_percent}%")
+            if processed_image is not None:
+                self.logger.debug(f"处理后图像形状: {processed_image.shape}")
+            else:
+                self.logger.warning("图像处理返回空结果")
+            
+            return processed_image
+            
+        except Exception as e:
+            self.logger.error(f"处理图像失败: {e}")
+            import traceback
+            self.logger.error(f"异常堆栈: {traceback.format_exc()}")
+            return None
     
     def _complete_current_stage(self):
         """完成当前阶段"""
@@ -192,11 +250,14 @@ class MultiStageManager(QObject):
         elapsed_time = time.time() - self.stage_start_time if self.stage_start_time else 0
         
         # 发送阶段完成信号
-        self.stage_completed.emit(self.current_stage + 1, stage['name'])
+        self.stage_completed.emit(self.current_stage + 1, stage.get('display_name', stage['name']))
         self.recording_stopped.emit(self.current_stage + 1)
         
-        self.logger.info(f"完成阶段 {self.current_stage + 1}: {stage['name']}, "
+        self.logger.info(f"完成阶段 {self.current_stage + 1}: {stage.get('display_name', stage['name'])}, "
                         f"用时: {elapsed_time:.1f}秒, 采集: {self.stage_recording_count}张")
+        
+        # 切换到下一阶段
+        self.session.next_stage()  # 调用session的next_stage方法
         
         # 短暂延迟后开始下一阶段（1.5秒过渡时间）
         QTimer.singleShot(1500, lambda: self._start_stage(self.current_stage + 1))
@@ -235,9 +296,16 @@ class MultiStageManager(QObject):
     
     def _get_processing_params(self):
         """获取当前的图像处理参数"""
-        # 这里需要从主窗口获取处理参数
-        # 暂时返回空字典，实际使用时需要传入参数
-        return {}
+        if self.get_processing_params_callback:
+            return self.get_processing_params_callback()
+        else:
+            # 返回默认参数
+            return {
+                'rotation_angle': 0,
+                'roi_enabled': False,
+                'roi_coords': None,
+                'scale_factor': 1.0
+            }
     
     def get_current_stage_info(self):
         """获取当前阶段信息"""
@@ -277,4 +345,4 @@ class MultiStageManager(QObject):
     
     def set_processing_params_callback(self, callback):
         """设置获取处理参数的回调函数"""
-        self._get_processing_params = callback
+        self.get_processing_params_callback = callback

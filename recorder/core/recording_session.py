@@ -1,6 +1,6 @@
 """
-录制会话管理模块
-管理录制会话的创建、状态跟踪和文件管理
+录制会话管理模块 - 调试版
+添加了详细的调试信息和错误检查
 """
 
 import os
@@ -8,43 +8,73 @@ import json
 import zipfile
 import shutil
 import time
+import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
 
 class RecordingSession:
     """
-录制会话管理器
-负责管理单次录制会话的所有方面
+    录制会话管理器 - 调试版
+    负责管理单次录制会话的所有方面
     """
     
     def __init__(self, user_info: Dict, save_path: str, session_type: str = "single"):
+        self.logger = logging.getLogger(__name__)
         self.user_info = user_info
         self.save_path = save_path
-        self.session_type = session_type  # "single" or "multi_stage"
+        self.session_type = session_type
         self.session_start_time = time.time()
         self.recording_count = 0
         self.current_session_folder = None
         
+        # 调试信息
+        self.logger.info(f"初始化录制会话: {session_type}")
+        self.logger.info(f"用户信息: {user_info}")
+        self.logger.info(f"保存路径: {save_path}")
+        
         # 初始化会话
-        self._create_session_folder()
+        success = self._create_session_folder()
+        if not success:
+            self.logger.error("创建会话文件夹失败")
+        else:
+            self.logger.info(f"会话文件夹创建成功: {self.current_session_folder}")
     
     def _create_session_folder(self):
         """创建会话文件夹"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        folder_name = f"{self.user_info['username']}_{self.session_type}_{timestamp}"
-        self.current_session_folder = os.path.join(self.save_path, folder_name)
-        
         try:
+            # 检查父目录是否存在
+            if not os.path.exists(self.save_path):
+                self.logger.info(f"创建父目录: {self.save_path}")
+                os.makedirs(self.save_path, exist_ok=True)
+            
+            # 检查父目录权限
+            if not os.access(self.save_path, os.W_OK):
+                self.logger.error(f"没有写权限: {self.save_path}")
+                return False
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            folder_name = f"{self.user_info['username']}_{self.session_type}_{timestamp}"
+            self.current_session_folder = os.path.join(self.save_path, folder_name)
+            
+            self.logger.info(f"尝试创建文件夹: {self.current_session_folder}")
             os.makedirs(self.current_session_folder, exist_ok=True)
-            return True
+            
+            # 验证文件夹是否成功创建
+            if os.path.exists(self.current_session_folder):
+                self.logger.info(f"文件夹创建成功: {self.current_session_folder}")
+                return True
+            else:
+                self.logger.error(f"文件夹创建失败: {self.current_session_folder}")
+                return False
+                
         except Exception as e:
-            print(f"创建会话文件夹失败: {e}")
+            self.logger.error(f"创建会话文件夹异常: {e}")
             return False
     
     def save_image(self, image, processing_params: Dict = None):
         """
-保存图像到会话文件夹
+        保存图像到会话文件夹 - 调试版
         
         Args:
             image: 要保存的图像
@@ -53,10 +83,25 @@ class RecordingSession:
         Returns:
             保存的文件路径
         """
-        if image is None or self.current_session_folder is None:
+        self.logger.debug(f"开始保存图像，计数: {self.recording_count}")
+        
+        if image is None:
+            self.logger.warning("图像为空，无法保存")
+            return None
+            
+        if self.current_session_folder is None:
+            self.logger.error("会话文件夹未初始化")
+            return None
+        
+        if not os.path.exists(self.current_session_folder):
+            self.logger.error(f"会话文件夹不存在: {self.current_session_folder}")
             return None
         
         try:
+            # 检查图像数据
+            self.logger.debug(f"图像形状: {image.shape if hasattr(image, 'shape') else 'unknown'}")
+            self.logger.debug(f"图像类型: {type(image)}")
+            
             # 生成文件名
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
             
@@ -72,22 +117,58 @@ class RecordingSession:
             filename = f"img_{timestamp}_{self.recording_count:06d}{suffix}_240x240.jpg"
             filepath = os.path.join(self.current_session_folder, filename)
             
+            self.logger.debug(f"保存路径: {filepath}")
+            
             # 保存为JPG格式，质量100（最高质量）
             import cv2
-            cv2.imwrite(filepath, image, [cv2.IMWRITE_JPEG_QUALITY, 100])
             
-            # 更新计数
-            self.recording_count += 1
+            # 检查cv2.imwrite的返回值
+            success = cv2.imwrite(filepath, image, [cv2.IMWRITE_JPEG_QUALITY, 100])
             
-            return filepath
+            if success:
+                # 验证文件是否真的被保存
+                if os.path.exists(filepath):
+                    file_size = os.path.getsize(filepath)
+                    self.logger.info(f"图像保存成功: {filename}, 大小: {file_size} 字节")
+                    self.recording_count += 1
+                    return filepath
+                else:
+                    self.logger.error(f"cv2.imwrite返回成功但文件不存在: {filepath}")
+                    return None
+            else:
+                self.logger.error(f"cv2.imwrite保存失败: {filepath}")
+                
+                # 尝试使用替代方法保存
+                try:
+                    import cv2
+                    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 100]
+                    result, encimg = cv2.imencode('.jpg', image, encode_param)
+                    if result:
+                        encimg.tofile(filepath)
+                        if os.path.exists(filepath):
+                            file_size = os.path.getsize(filepath)
+                            self.logger.info(f"使用替代方法保存成功: {filename}, 大小: {file_size} 字节")
+                            self.recording_count += 1
+                            return filepath
+                        else:
+                            self.logger.error(f"替代方法也失败: {filepath}")
+                    else:
+                        self.logger.error("图像编码失败")
+                except Exception as e2:
+                    self.logger.error(f"替代保存方法异常: {e2}")
+                
+                return None
             
         except Exception as e:
-            print(f"保存图像失败: {e}")
+            self.logger.error(f"保存图像异常: {e}")
+            import traceback
+            self.logger.error(f"异常堆栈: {traceback.format_exc()}")
             return None
     
     def create_session_report(self):
         """创建会话报告"""
         if not self.current_session_folder:
+            self.logger.warning("无法创建会话报告：会话文件夹不存在")
             return None
             
         try:
@@ -123,15 +204,17 @@ class RecordingSession:
             with open(report_file, 'w', encoding='utf-8') as f:
                 json.dump(report, f, ensure_ascii=False, indent=2)
             
+            self.logger.info(f"会话报告创建成功: {report_file}")
             return report_file
             
         except Exception as e:
-            print(f"创建会话报告失败: {e}")
+            self.logger.error(f"创建会话报告失败: {e}")
             return None
     
     def create_session_package(self):
         """创建会话数据包（ZIP文件）"""
         if not self.current_session_folder or not os.path.exists(self.current_session_folder):
+            self.logger.warning("无法创建数据包：会话文件夹不存在")
             return None
             
         try:
@@ -147,10 +230,11 @@ class RecordingSession:
                                                   os.path.dirname(self.current_session_folder))
                         zipf.write(file_path, arc_path)
             
+            self.logger.info(f"数据包创建成功: {zip_filepath}")
             return zip_filepath
             
         except Exception as e:
-            print(f"创建会话数据包失败: {e}")
+            self.logger.error(f"创建会话数据包失败: {e}")
             return None
     
     def get_session_info(self):
@@ -166,8 +250,8 @@ class RecordingSession:
 
 class MultiStageSession(RecordingSession):
     """
-多阶段录制会话管理器
-专门用于管理多阶段录制会话
+    多阶段录制会话管理器 - 调试版
+    专门用于管理多阶段录制会话
     """
     
     def __init__(self, user_info: Dict, save_path: str, recording_stages: List[Dict]):
@@ -183,30 +267,52 @@ class MultiStageSession(RecordingSession):
     def _create_stage_folders(self):
         """为每个阶段创建子文件夹"""
         if not self.current_session_folder:
+            self.logger.error("无法创建阶段文件夹：主会话文件夹不存在")
             return
             
         for i, stage in enumerate(self.recording_stages):
+            # 使用英文名称避免路径问题
+            stage_name = stage.get('name', f'stage_{i+1}')
             stage_folder = os.path.join(
                 self.current_session_folder, 
-                f"stage_{i+1}_{stage['name']}"
+                f"stage_{i+1}_{stage_name}"
             )
             try:
+                self.logger.info(f"创建阶段文件夹: {stage_folder}")
                 os.makedirs(stage_folder, exist_ok=True)
-                self.stage_folders.append(stage_folder)
+                
+                if os.path.exists(stage_folder):
+                    self.stage_folders.append(stage_folder)
+                    self.logger.info(f"阶段文件夹创建成功: {stage_folder}")
+                else:
+                    self.logger.error(f"阶段文件夹创建失败: {stage_folder}")
+                    
             except Exception as e:
-                print(f"创建阶段文件夹失败: {e}")
+                self.logger.error(f"创建阶段文件夹异常: {e}")
     
     def save_stage_image(self, image, processing_params: Dict = None):
-        """保存阶段图像"""
+        """保存阶段图像 - 调试版"""
+        self.logger.debug(f"保存阶段图像，当前阶段: {self.current_stage}, 计数: {self.stage_recording_count}")
+        
         if (image is None or 
             self.current_stage >= len(self.stage_folders) or 
             not self.stage_folders[self.current_stage]):
+            self.logger.warning(f"无法保存阶段图像：图像={image is not None}, 阶段={self.current_stage}, 文件夹存在={len(self.stage_folders) > self.current_stage}")
             return None
         
         try:
+            # 检查阶段文件夹是否存在
+            stage_folder = self.stage_folders[self.current_stage]
+            if not os.path.exists(stage_folder):
+                self.logger.error(f"阶段文件夹不存在: {stage_folder}")
+                return None
+            
             # 生成文件名
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
             stage = self.recording_stages[self.current_stage]
+            
+            # 使用英文名称避免路径问题
+            stage_name = stage.get('name', f'stage_{self.current_stage+1}')
             
             # 添加处理后缀
             suffix_parts = []
@@ -217,25 +323,59 @@ class MultiStageSession(RecordingSession):
                     suffix_parts.append("roi")
                     
             suffix = "_" + "_".join(suffix_parts) if suffix_parts else ""
-            filename = f"{stage['name']}_{timestamp}_{self.stage_recording_count:06d}{suffix}_240x240.jpg"
-            filepath = os.path.join(self.stage_folders[self.current_stage], filename)
+            filename = f"{stage_name}_{timestamp}_{self.stage_recording_count:06d}{suffix}_240x240.jpg"
+            filepath = os.path.join(stage_folder, filename)
             
-            # 保存图像
+            self.logger.debug(f"阶段图像保存路径: {filepath}")
+            
+            # 使用cv2.imencode方法避免中文路径问题
             import cv2
-            cv2.imwrite(filepath, image, [cv2.IMWRITE_JPEG_QUALITY, 100])
+            try:
+                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 100]
+                result, encimg = cv2.imencode('.jpg', image, encode_param)
+                if result:
+                    encimg.tofile(filepath)
+                    if os.path.exists(filepath):
+                        file_size = os.path.getsize(filepath)
+                        self.logger.info(f"阶段图像保存成功: {filename}, 大小: {file_size} 字节")
+                        
+                        # 更新计数
+                        self.stage_recording_count += 1
+                        self.recording_count += 1
+                        
+                        return filepath
+                    else:
+                        self.logger.error(f"图像编码保存失败: {filepath}")
+                else:
+                    self.logger.error("图像编码失败")
+            except Exception as encode_error:
+                self.logger.error(f"图像编码异常: {encode_error}")
             
-            # 更新计数
-            self.stage_recording_count += 1
-            self.recording_count += 1
+            # 如果imencode失败，尝试cv2.imwrite（仅用于调试）
+            success = cv2.imwrite(filepath, image, [cv2.IMWRITE_JPEG_QUALITY, 100])
             
-            return filepath
+            if success and os.path.exists(filepath):
+                file_size = os.path.getsize(filepath)
+                self.logger.info(f"阶段图像cv2.imwrite保存成功: {filename}, 大小: {file_size} 字节")
+                
+                # 更新计数
+                self.stage_recording_count += 1
+                self.recording_count += 1
+                
+                return filepath
+            else:
+                self.logger.error(f"所有保存方法都失败: {filepath}")
+                return None
             
         except Exception as e:
-            print(f"保存阶段图像失败: {e}")
+            self.logger.error(f"保存阶段图像异常: {e}")
+            import traceback
+            self.logger.error(f"异常堆栈: {traceback.format_exc()}")
             return None
     
     def next_stage(self):
         """进入下一阶段"""
+        self.logger.info(f"从阶段 {self.current_stage} 切换到阶段 {self.current_stage + 1}")
         self.current_stage += 1
         self.stage_recording_count = 0
         return self.current_stage < len(self.recording_stages)
@@ -251,13 +391,14 @@ class MultiStageSession(RecordingSession):
             "stage_name": stage['name'],
             "description": stage['description'],
             "current_count": self.stage_recording_count,
-            "duration_seconds": stage.get('duration_seconds', 5),  # 默认5秒
+            "duration_seconds": stage.get('duration_seconds', 5),
             "progress": f"{self.stage_recording_count} 张图像"
         }
     
     def create_multi_stage_summary(self):
         """创建多阶段录制汇总"""
         if not self.current_session_folder:
+            self.logger.warning("无法创建多阶段汇总：会话文件夹不存在")
             return None
             
         try:
@@ -289,14 +430,16 @@ class MultiStageSession(RecordingSession):
                         "folder": f"stage_{i+1}_{stage['name']}"
                     }
                     summary["stages"].append(stage_info)
+                    self.logger.info(f"阶段 {i+1} 统计: {len(stage_images)} 张图像")
             
             # 保存汇总文件
             summary_file = os.path.join(self.current_session_folder, "multi_stage_summary.json")
             with open(summary_file, 'w', encoding='utf-8') as f:
                 json.dump(summary, f, ensure_ascii=False, indent=2)
             
+            self.logger.info(f"多阶段汇总创建成功: {summary_file}")
             return summary_file
             
         except Exception as e:
-            print(f"创建多阶段汇总失败: {e}")
+            self.logger.error(f"创建多阶段汇总失败: {e}")
             return None
