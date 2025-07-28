@@ -17,39 +17,33 @@ class ImageProcessor:
     @staticmethod
     def rotate_image(image, angle):
         """
-        旋转图像
-        
-        Args:
-            image: 输入图像
-            angle: 旋转角度
-            
-        Returns:
-            旋转后的图像
+        平滑旋转图像 - 避免边缘撕裂
         """
         if angle == 0:
             return image
             
         height, width = image.shape[:2]
-        center = (width // 2, height // 2)
         
-        # 计算旋转矩阵
+       
+        center = (width // 2, height // 2)
         rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
         
-        # 计算旋转后的边界框
         cos = np.abs(rotation_matrix[0, 0])
         sin = np.abs(rotation_matrix[0, 1])
         new_width = int((height * sin) + (width * cos))
         new_height = int((height * cos) + (width * sin))
         
-        # 调整旋转矩阵的平移部分
         rotation_matrix[0, 2] += (new_width / 2) - center[0]
         rotation_matrix[1, 2] += (new_height / 2) - center[1]
         
-        # 执行旋转
-        rotated = cv2.warpAffine(image, rotation_matrix, (new_width, new_height), 
-                                flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
-        
-        return rotated
+        return cv2.warpAffine(
+            image, 
+            rotation_matrix, 
+            (new_width, new_height),
+            flags=cv2.INTER_CUBIC,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=(0, 0, 0)
+        )
     
     @staticmethod
     def extract_roi(image, roi_rect):

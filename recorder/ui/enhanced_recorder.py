@@ -43,13 +43,17 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         self.multistage_manager.set_processing_params_callback(self.get_processing_params)
         
         # 初始化ROI面板（现在preview_label已经可用）
-        self.initialize_roi_panel()
+        QTimer.singleShot(100, self.initialize_roi_panel_delayed)
     
     def initialize_roi_panel(self):
         """初始化ROI面板"""
         # ROI面板将在需要时延迟创建
         pass
-    
+    def initialize_roi_panel_delayed(self):
+        """延迟初始化ROI面板"""
+        if hasattr(self, 'preview_label') and hasattr(self, 'roi_layout'):
+            self._roi_panel = ROIPanel(self.preview_label)
+            self.roi_layout.addWidget(self._roi_panel)
     @property
     def roi_panel(self):
         """延迟创建ROI面板"""
@@ -485,19 +489,33 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
     
     def get_processing_params(self):
         """获取处理参数"""
-        roi_settings = self.roi_panel.get_roi_settings() if self.roi_panel else {'enabled': False, 'coords': None}
+        # 确保面板存在
+        if not hasattr(self, '_roi_panel') or self._roi_panel is None:
+            roi_settings = {'enabled': False, 'coords': None}
+        else:
+            roi_settings = self._roi_panel.get_roi_settings()
+        
         return {
             'rotation_angle': self.rotation_panel.get_rotation_angle(),
             'roi_enabled': roi_settings['enabled'],
-            'roi_coords': roi_settings['coords']
+            'roi_coords': roi_settings['coords'],
+            'scale_factor': getattr(self, 'preview_scale_factor', 1.0)
         }
     
     def update_preview(self):
-        """更新预览显示 - 修复旋转显示问题"""
+        """更新预览显示 - 应用旋转效果"""
         if self.current_image is not None:
             try:
-                # 使用原始图像进行预览，不应用任何处理
+                # 获取当前处理参数
+                processing_params = self.get_processing_params()
+                
+                # 应用旋转到预览图像
                 preview_image = self.current_image.copy()
+                if processing_params['rotation_angle'] != 0:
+                    preview_image = ImageProcessor.rotate_image(
+                        preview_image, 
+                        processing_params['rotation_angle']
+                    )
                 
                 # 转换为Qt格式并显示
                 height, width, channel = preview_image.shape
@@ -511,17 +529,11 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
                 )
                 self.preview_label.setPixmap(scaled_pixmap)
                 
-                # 计算缩放因子用于ROI坐标转换
+                # 更新缩放因子
                 self.preview_scale_factor = min(
                     preview_size.width() / width,
                     preview_size.height() / height
                 )
-                
-                # 更新ROI信息
-                if hasattr(self.preview_label, 'get_roi_rect') and self.roi_panel:
-                    roi_rect = self.preview_label.get_roi_rect()
-                    if roi_rect:
-                        self.roi_panel.update_roi_info(roi_rect)
                 
                 # 更新分辨率显示
                 self.resolution_label.setText(f"📐 分辨率: {width}×{height}")
