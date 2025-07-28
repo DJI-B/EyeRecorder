@@ -273,10 +273,9 @@ WebSocket错误"""
         """接收到图像"""
         self.current_image = image
         
-        # 注释掉自动捕获，现在使用定时器控制
-        # 如果正在进行多阶段录制，自动保存图像
-        # if self.multistage_manager.is_active():
-        #     self.multistage_manager.capture_current_image()
+        # 收到图就立即录制 - 如果正在进行多阶段录制，自动保存图像
+        if self.multistage_manager.is_active():
+            self.multistage_manager.capture_current_image()
     
     def on_status_updated(self, status):
         """状态更新"""

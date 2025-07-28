@@ -138,8 +138,8 @@ class MultiStageManager(QObject):
         self.stage_start_time = time.time()
         self.last_capture_time = 0
         
-        # 启动图像捕获定时器（根据设置的间隔）
-        self.stage_timer.start(stage['interval_ms'])
+        # 删除图像捕获定时器，现在收到图就立即录制
+        # self.stage_timer.start(stage['interval_ms'])
         
         # 启动阶段时长定时器（5秒后自动完成）
         duration_ms = stage['duration_seconds'] * 1000
@@ -148,20 +148,27 @@ class MultiStageManager(QObject):
         # 发送录制开始信号
         self.recording_started.emit(stage_index + 1)
         
-        self.logger.info(f"开始阶段 {stage_index + 1} 录制: {stage.get('display_name', stage['name'])}, 时长: {stage['duration_seconds']}秒")
+        self.logger.info(f"开始阶段 {stage_index + 1} 录制: {stage.get('display_name', stage['name'])}, 时长: {stage['duration_seconds']}秒 - 收到图像立即录制")
     
     def capture_current_image(self):
         """捕获当前图像（由外部调用）"""
         return self._capture_stage_image()
     
     def _capture_stage_image(self):
-        """阶段图像捕获（定时器触发）- 修复版"""
+        """阶段图像捕获（收到图像时触发）- 修复版"""
         if not self.is_multi_stage_active or not self.is_recording:
             return False
         
         if not self.websocket_client:
             self.logger.warning("WebSocket客户端不可用")
             return False
+        
+        # 添加最小间隔限制，防止过于频繁保存（可选，如果不需要可以删除）
+        current_time = time.time()
+        min_interval = 0.05  # 最小间隔50ms，避免过于频繁保存
+        if current_time - self.last_capture_time < min_interval:
+            return False
+        self.last_capture_time = current_time
         
         # 获取当前图像
         current_image = self.websocket_client.get_current_image()

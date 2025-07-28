@@ -174,7 +174,7 @@ class RecordingStageConfig:
                 "display_name": "正常眨眼",  # 显示用的中文名
                 "description": "眼睛正常睁开，四处看，自然眨眼",
                 "duration_seconds": 5,  # 录制时长5秒
-                "interval_ms": 200,     # 采集间隔200ms，提高频率
+                "interval_ms": 50,      # 保留用于兼容性，实际不使用（收到图就录制）
                 "voice_messages": [
                     "请保持眼睛正常睁开",
                     "您可以四处看看，正常眨眼",
@@ -186,7 +186,7 @@ class RecordingStageConfig:
                 "display_name": "半睁眼",
                 "description": "眼睛半睁开，四处看，不要眨眼",
                 "duration_seconds": 5,  # 录制时长5秒
-                "interval_ms": 200,     # 采集间隔200ms
+                "interval_ms": 50,      # 保留用于兼容性，实际不使用（收到图就录制）
                 "voice_messages": [
                     "请将眼睛半睁开",
                     "保持半睁眼状态，不要眨眼",
@@ -198,7 +198,7 @@ class RecordingStageConfig:
                 "display_name": "闭眼放松",
                 "description": "完全闭眼，保持放松状态",
                 "duration_seconds": 5,  # 录制时长5秒
-                "interval_ms": 200,     # 采集间隔200ms
+                "interval_ms": 50,      # 保留用于兼容性，实际不使用（收到图就录制）
                 "voice_messages": [
                     "请完全闭上眼睛",
                     "保持放松状态",
