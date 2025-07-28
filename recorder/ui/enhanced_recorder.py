@@ -123,7 +123,7 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         layout.addWidget(title)
         
         # 副标题
-        subtitle = QLabel("多阶段眼球录制 v3.1.0 - 专为研究设计")
+        subtitle = QLabel("多阶段眼球录制 v3.1.0 - v2.0新模型数据集收集")
         subtitle.setAlignment(Qt.AlignCenter)
         subtitle.setStyleSheet("""
             QLabel {
@@ -239,13 +239,13 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         
         # WebSocket URL输入
         url_layout = QHBoxLayout()
-        url_label = QLabel("设备地址:")
+        url_label = QLabel("设备IP:")
         url_label.setStyleSheet("font-weight: 600;")
         url_layout.addWidget(url_label)
         
         self.websocket_url = QLineEdit()
-        self.websocket_url.setText(self.app_settings.get_websocket_url())
-        self.websocket_url.setPlaceholderText("输入WebSocket地址")
+        self.websocket_url.setText(self.app_settings.get_websocket_url())  # 现在返回的是IP地址
+        self.websocket_url.setPlaceholderText("输入设备IP地址或URL，如：192.168.1.100 或 http://192.168.1.100")
         self.websocket_url.setStyleSheet("""
             QLineEdit {
                 padding: 8px;
@@ -409,25 +409,42 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         """接收到成功解码的图像时的处理"""
         # 调用父类方法更新current_image
         super().on_image_received(image)
-        
-        # 添加调试日志
-        if hasattr(self, 'logger'):
-            self.logger.debug(f"接收到图像，尺寸: {image.shape if image is not None else 'None'}")
     
     # 事件处理方法
     def connect_device(self):
         """连接设备"""
-        url = self.websocket_url.text().strip()
-        if not url:
-            QMessageBox.warning(self, "⚠️ 警告", "请输入设备地址！")
+        ip_address = self.websocket_url.text().strip()
+        if not ip_address:
+            QMessageBox.warning(self, "⚠️ 警告", "请输入设备IP地址！")
             return
         
-        self.app_settings.set_websocket_url(url)
-        self.websocket_manager.set_url(url)
+        # 自动构建完整的WebSocket URL
+        # 如果用户输入的已经是完整WebSocket URL，则直接使用
+        if ip_address.startswith('ws://') or ip_address.startswith('wss://'):
+            websocket_url = ip_address
+        # 如果用户输入的是HTTP URL，转换为WebSocket URL
+        elif ip_address.startswith('http://'):
+            # http://192.168.157.238 -> ws://192.168.157.238/ws
+            ip_part = ip_address.replace('http://', '')
+            websocket_url = f"ws://{ip_part}/ws"
+        elif ip_address.startswith('https://'):
+            # https://192.168.157.238 -> wss://192.168.157.238/ws
+            ip_part = ip_address.replace('https://', '')
+            websocket_url = f"wss://{ip_part}/ws"
+        else:
+            # 纯IP地址，自动添加前缀和后缀
+            websocket_url = f"ws://{ip_address}/ws"
+        
+        # 保存IP地址（不是完整URL）
+        self.app_settings.set_websocket_url(ip_address)
+        self.websocket_manager.set_url(websocket_url)
         self.websocket_manager.connect()
         
         self.connect_btn.setEnabled(False)
         self.disconnect_btn.setEnabled(True)
+        
+        # 显示实际连接的URL
+        self.logger.info(f"正在连接到: {websocket_url}")
     
     def disconnect_device(self):
         """断开设备连接"""
@@ -513,6 +530,16 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
         """更新预览显示 - 保持比例，传递图像尺寸信息"""
         if self.current_image is not None:
             try:
+                # 验证图像数据
+                if not hasattr(self.current_image, 'shape') or len(self.current_image.shape) != 3:
+                    self.logger.warning("图像格式无效，跳过预览更新")
+                    return
+                
+                height, width, channel = self.current_image.shape
+                if height <= 0 or width <= 0 or channel != 3:
+                    self.logger.warning(f"图像尺寸异常，跳过预览更新: {width}x{height}x{channel}")
+                    return
+                
                 # 获取当前处理参数
                 processing_params = self.get_processing_params()
                 
@@ -530,6 +557,11 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
                 q_image = QImage(preview_image.data, width, height, 
                                bytes_per_line, QImage.Format_RGB888).rgbSwapped()
                 
+                # 验证QImage是否有效
+                if q_image.isNull():
+                    self.logger.warning("QImage转换失败，跳过预览更新")
+                    return
+                
                 # 获取预览区域尺寸
                 preview_size = self.preview_label.size()
                 
@@ -539,6 +571,11 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
                     Qt.KeepAspectRatio,  # 保持宽高比
                     Qt.SmoothTransformation
                 )
+                
+                # 验证缩放后的pixmap是否有效
+                if scaled_pixmap.isNull():
+                    self.logger.warning("图像缩放失败，跳过预览更新")
+                    return
                 
                 # 先传递原始图像尺寸给ROI选择器（在setPixmap之前）
                 self.preview_label.original_image_size = (width, height)
@@ -555,10 +592,11 @@ class EnhancedRecorderWindow(BaseRecorderWindow):
                 # 更新分辨率显示
                 self.resolution_label.setText(f"📐 分辨率: {width}×{height}")
                 
-                self.logger.debug(f"预览更新: 旋转角度={processing_params['rotation_angle']}, 尺寸={width}x{height}, 缩放因子={self.preview_scale_factor:.3f}")
-                
             except Exception as e:
-                self.logger.error(f"更新预览失败: {e}")
+                if "Corrupt JPEG data" in str(e) or "premature end of data segment" in str(e):
+                    self.logger.warning("检测到损坏的JPEG数据，跳过预览更新")
+                else:
+                    self.logger.error(f"更新预览失败: {e}")
     
     def update_duration(self):
         """更新持续时间显示"""

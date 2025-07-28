@@ -56,12 +56,6 @@ class ROISelector(QLabel):
                     pixmap_size.width() / original_width,
                     pixmap_size.height() / original_height
                 )
-                print(f"[DEBUG] 原始图像尺寸: {original_width}x{original_height}")
-                print(f"[DEBUG] 预览图像尺寸: {pixmap_size.width()}x{pixmap_size.height()}")
-                print(f"[DEBUG] 缩放因子: {self.scale_factor:.3f}")
-            
-            print(f"[DEBUG] 图像显示区域: {self.image_rect}")
-            print(f"[DEBUG] 预览标签尺寸: {label_size}")
     
     def mousePressEvent(self, event):
         """鼠标按下事件 - 检查是否在有效图像区域内"""
@@ -75,9 +69,6 @@ class ROISelector(QLabel):
                 relative_y = click_pos.y() - self.image_rect.y()
                 self.start_point = QPoint(relative_x, relative_y)
                 self.is_selecting = True
-                print(f"[DEBUG] 开始选择ROI，相对坐标: ({relative_x}, {relative_y})")
-            else:
-                print(f"[DEBUG] 点击在黑条区域，忽略")
     
     def mouseMoveEvent(self, event):
         """鼠标移动事件 - 限制在有效图像区域内"""
@@ -130,9 +121,6 @@ class ROISelector(QLabel):
                         
                         # 存储原始图像坐标
                         self.roi_rect = (original_x, original_y, original_w, original_h)
-                        print(f"[DEBUG] 预览ROI: ({preview_x}, {preview_y}, {preview_w}, {preview_h})")
-                        print(f"[DEBUG] 原始ROI: ({original_x}, {original_y}, {original_w}, {original_h})")
-                        print(f"[DEBUG] 缩放因子: {self.scale_factor:.3f}")
                         
                         # 发送原始图像坐标
                         self.roi_selected.emit(self.roi_rect)

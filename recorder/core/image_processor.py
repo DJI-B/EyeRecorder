@@ -100,14 +100,9 @@ class ImageProcessor:
             
         processed_image = image.copy()
         
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.debug(f"原始图像尺寸: {processed_image.shape}")
-        
         # 1. 首先应用旋转（与预览显示顺序一致）
         if rotation_angle != 0:
             processed_image = ImageProcessor.rotate_image(processed_image, rotation_angle)
-            logger.debug(f"旋转后尺寸: {processed_image.shape}")
         
         # 2. 然后在旋转后的图像上提取ROI
         if roi_coords and scale_factor > 0:
@@ -126,17 +121,13 @@ class ImageProcessor:
             actual_w = min(actual_w, img_width - actual_x)
             actual_h = min(actual_h, img_height - actual_y)
             
-            logger.debug(f"ROI坐标转换: 预览({x},{y},{w},{h}) → 实际({actual_x},{actual_y},{actual_w},{actual_h})")
-            
             # 提取ROI
             if actual_w > 10 and actual_h > 10:
                 processed_image = processed_image[actual_y:actual_y+actual_h, 
                                                 actual_x:actual_x+actual_w]
-                logger.debug(f"ROI提取后尺寸: {processed_image.shape}")
         
         # 3. 最后调整到目标尺寸
         processed_image = ImageProcessor.resize_to_target(processed_image, target_size)
-        logger.debug(f"最终尺寸: {processed_image.shape}")
         
         return processed_image
     
@@ -164,8 +155,6 @@ class ImageProcessor:
             x, y, w, h = roi_coords
             original_h, original_w = processed_image.shape[:2]
             
-            logger.debug(f"ROI处理: 旋转后图像尺寸={original_w}x{original_h}, ROI坐标=({x},{y},{w},{h})")
-            
             # 边界检查
             x = max(0, min(x, original_w - 1))
             y = max(0, min(y, original_h - 1))
@@ -175,7 +164,6 @@ class ImageProcessor:
             if w > 10 and h > 10:
                 # 直接从旋转后的原图提取ROI
                 roi_image = processed_image[y:y+h, x:x+w]
-                logger.debug(f"ROI提取成功: 实际坐标({x},{y},{w},{h}) -> ROI尺寸{roi_image.shape}")
                 processed_image = roi_image
             else:
                 logger.warning(f"ROI区域太小: {w}x{h}, 使用原图")

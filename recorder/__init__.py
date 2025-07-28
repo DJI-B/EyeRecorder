@@ -5,7 +5,7 @@ PaperTracker 图像录制工具
 
 __version__ = "3.1.0"
 __author__ = "PaperTracker Team"
-__description__ = "专为小白用户设计的简洁录制界面"
+__description__ = "洁录制界面"
 
 # 导入主要组件
 from .core.image_processor import ImageProcessor

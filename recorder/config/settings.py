@@ -38,7 +38,7 @@ class AppSettings:
         default_save_path = os.path.join(program_root, 'saved_images')
         
         defaults = {
-            'websocket_url': 'ws://localhost:8080',
+            'websocket_url': '192.168.157.238',  # 默认IP地址，程序会自动添加ws://和/ws
             'save_path': default_save_path,
             'auto_save_enabled': True,
             'auto_save_interval': 1000,  # 毫秒
@@ -65,11 +65,32 @@ class AppSettings:
         self.settings.sync()
     
     def get_websocket_url(self):
-        """获取WebSocket URL"""
-        return self.get('websocket_url', 'ws://localhost:8080')
+        """获取WebSocket URL - 返回IP地址"""
+        url = self.get('websocket_url', '192.168.157.238')
+        # 如果存储的是完整URL，提取IP地址部分
+        if url.startswith('ws://'):
+            # 提取IP地址部分：ws://192.168.1.100/ws -> 192.168.1.100
+            url = url.replace('ws://', '').split('/')[0]
+        elif url.startswith('wss://'):
+            url = url.replace('wss://', '').split('/')[0]
+        elif url.startswith('http://'):
+            # 提取IP地址部分：http://192.168.1.100 -> 192.168.1.100
+            url = url.replace('http://', '').split('/')[0]
+        elif url.startswith('https://'):
+            url = url.replace('https://', '').split('/')[0]
+        return url
     
     def set_websocket_url(self, url):
-        """设置WebSocket URL"""
+        """设置WebSocket URL - 只保存IP地址"""
+        # 如果传入的是完整URL，提取IP地址部分
+        if url.startswith('ws://'):
+            url = url.replace('ws://', '').split('/')[0]
+        elif url.startswith('wss://'):
+            url = url.replace('wss://', '').split('/')[0]
+        elif url.startswith('http://'):
+            url = url.replace('http://', '').split('/')[0]
+        elif url.startswith('https://'):
+            url = url.replace('https://', '').split('/')[0]
         self.set('websocket_url', url)
     
     def get_save_path(self):
@@ -173,7 +194,7 @@ class RecordingStageConfig:
                 "name": "normal_blink",  # 使用英文名避免路径问题
                 "display_name": "正常眨眼",  # 显示用的中文名
                 "description": "眼睛正常睁开，四处看，自然眨眼",
-                "duration_seconds": 5,  # 录制时长5秒
+                "duration_seconds": 10,  # 录制时长10秒
                 "interval_ms": 50,      # 保留用于兼容性，实际不使用（收到图就录制）
                 "voice_messages": [
                     "请保持眼睛正常睁开",
@@ -185,7 +206,7 @@ class RecordingStageConfig:
                 "name": "half_open",
                 "display_name": "半睁眼",
                 "description": "眼睛半睁开，四处看，不要眨眼",
-                "duration_seconds": 5,  # 录制时长5秒
+                "duration_seconds": 10,  # 录制时长10秒
                 "interval_ms": 50,      # 保留用于兼容性，实际不使用（收到图就录制）
                 "voice_messages": [
                     "请将眼睛半睁开",
@@ -197,7 +218,7 @@ class RecordingStageConfig:
                 "name": "closed_relax",
                 "display_name": "闭眼放松",
                 "description": "完全闭眼，保持放松状态",
-                "duration_seconds": 5,  # 录制时长5秒
+                "duration_seconds": 10,  # 录制时长10秒
                 "interval_ms": 50,      # 保留用于兼容性，实际不使用（收到图就录制）
                 "voice_messages": [
                     "请完全闭上眼睛",

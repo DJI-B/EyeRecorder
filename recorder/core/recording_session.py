@@ -83,8 +83,6 @@ class RecordingSession:
         Returns:
             保存的文件路径
         """
-        self.logger.debug(f"开始保存图像，计数: {self.recording_count}")
-        
         if image is None:
             self.logger.warning("图像为空，无法保存")
             return None
@@ -98,10 +96,6 @@ class RecordingSession:
             return None
         
         try:
-            # 检查图像数据
-            self.logger.debug(f"图像形状: {image.shape if hasattr(image, 'shape') else 'unknown'}")
-            self.logger.debug(f"图像类型: {type(image)}")
-            
             # 生成文件名
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
             
@@ -116,8 +110,6 @@ class RecordingSession:
             suffix = "_" + "_".join(suffix_parts) if suffix_parts else ""
             filename = f"img_{timestamp}_{self.recording_count:06d}{suffix}_240x240.jpg"
             filepath = os.path.join(self.current_session_folder, filename)
-            
-            self.logger.debug(f"保存路径: {filepath}")
             
             # 保存为JPG格式，质量100（最高质量）
             import cv2
@@ -291,9 +283,7 @@ class MultiStageSession(RecordingSession):
                 self.logger.error(f"创建阶段文件夹异常: {e}")
     
     def save_stage_image(self, image, processing_params: Dict = None):
-        """保存阶段图像 - 调试版"""
-        self.logger.debug(f"保存阶段图像，当前阶段: {self.current_stage}, 计数: {self.stage_recording_count}")
-        
+        """保存阶段图像"""
         if (image is None or 
             self.current_stage >= len(self.stage_folders) or 
             not self.stage_folders[self.current_stage]):
@@ -325,8 +315,6 @@ class MultiStageSession(RecordingSession):
             suffix = "_" + "_".join(suffix_parts) if suffix_parts else ""
             filename = f"{stage_name}_{timestamp}_{self.stage_recording_count:06d}{suffix}_240x240.jpg"
             filepath = os.path.join(stage_folder, filename)
-            
-            self.logger.debug(f"阶段图像保存路径: {filepath}")
             
             # 使用cv2.imencode方法避免中文路径问题
             import cv2

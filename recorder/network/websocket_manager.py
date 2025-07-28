@@ -249,12 +249,26 @@ class WebSocketManager(QObject):
                 image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                 
                 if image is not None:
-                    self.current_image = image
-                    self.image_count += 1
-                    self.last_image_time = time.time()
-                    self.image_received.emit(image)
+                    # 验证图像数据的完整性
+                    try:
+                        # 简单验证：检查图像形状是否合理
+                        height, width = image.shape[:2]
+                        if height > 0 and width > 0 and height < 10000 and width < 10000:
+                            self.current_image = image
+                            self.image_count += 1
+                            self.last_image_time = time.time()
+                            self.image_received.emit(image)
+                        else:
+                            self.logger.warning(f"图像尺寸异常，跳过: {width}x{height}")
+                    except Exception as validation_error:
+                        self.logger.warning(f"图像验证失败，跳过损坏的图像: {validation_error}")
+                else:
+                    self.logger.warning("图像解码失败，可能是损坏的JPEG数据，跳过")
         except Exception as e:
-            self.logger.error(f"解码二进制图像错误: {e}")
+            if "Corrupt JPEG data" in str(e) or "premature end of data segment" in str(e):
+                self.logger.warning("检测到损坏的JPEG数据，跳过此帧")
+            else:
+                self.logger.error(f"解码二进制图像错误: {e}")
     
     async def _decode_base64_image(self, base64_data):
         """解码base64图像数据"""
@@ -266,12 +280,26 @@ class WebSocketManager(QObject):
             image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
             if image is not None:
-                self.current_image = image
-                self.image_count += 1
-                self.last_image_time = time.time()
-                self.image_received.emit(image)
+                # 验证图像数据的完整性
+                try:
+                    # 简单验证：检查图像形状是否合理
+                    height, width = image.shape[:2]
+                    if height > 0 and width > 0 and height < 10000 and width < 10000:
+                        self.current_image = image
+                        self.image_count += 1
+                        self.last_image_time = time.time()
+                        self.image_received.emit(image)
+                    else:
+                        self.logger.warning(f"base64图像尺寸异常，跳过: {width}x{height}")
+                except Exception as validation_error:
+                    self.logger.warning(f"base64图像验证失败，跳过损坏的图像: {validation_error}")
+            else:
+                self.logger.warning("base64图像解码失败，可能是损坏的JPEG数据，跳过")
         except Exception as e:
-            self.logger.error(f"解码base64图像错误: {e}")
+            if "Corrupt JPEG data" in str(e) or "premature end of data segment" in str(e):
+                self.logger.warning("检测到损坏的base64 JPEG数据，跳过此帧")
+            else:
+                self.logger.error(f"解码base64图像错误: {e}")
     
     def get_connection_stats(self):
         """获取连接统计信息"""

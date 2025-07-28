@@ -271,6 +271,25 @@ WebSocket错误"""
     
     def on_image_received(self, image):
         """接收到图像"""
+        # 验证图像数据
+        if image is None:
+            return
+        
+        try:
+            # 基本验证：检查图像形状
+            if not hasattr(image, 'shape') or len(image.shape) != 3:
+                self.logger.warning("接收到无效格式的图像，跳过")
+                return
+                
+            height, width, channel = image.shape
+            if height <= 0 or width <= 0 or channel != 3:
+                self.logger.warning(f"接收到异常尺寸的图像，跳过: {width}x{height}x{channel}")
+                return
+                
+        except Exception as e:
+            self.logger.warning(f"图像验证失败，跳过: {e}")
+            return
+        
         self.current_image = image
         
         # 收到图就立即录制 - 如果正在进行多阶段录制，自动保存图像

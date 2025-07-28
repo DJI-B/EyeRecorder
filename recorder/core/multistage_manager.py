@@ -173,7 +173,6 @@ class MultiStageManager(QObject):
         # 获取当前图像
         current_image = self.websocket_client.get_current_image()
         if current_image is None:
-            self.logger.debug("当前没有可用图像")
             return False
         
         try:
@@ -204,7 +203,6 @@ class MultiStageManager(QObject):
                     progress_percent
                 )
                 
-                self.logger.debug(f"保存第 {self.stage_recording_count} 张图像，文件: {filepath}")
                 return True
             else:
                 self.logger.warning("图像保存失败")
@@ -220,8 +218,6 @@ class MultiStageManager(QObject):
             if image is None:
                 self.logger.warning("输入图像为空")
                 return None
-            
-            self.logger.debug(f"处理图像参数: {processing_params}")
             
             # 使用所见即所得的处理方法
             if processing_params.get('preview_size'):
@@ -242,9 +238,6 @@ class MultiStageManager(QObject):
                     target_size=(240, 240),
                     scale_factor=processing_params.get('scale_factor', 1.0)
                 )
-            
-            if processed_image is not None:
-                self.logger.debug(f"处理后图像形状: {processed_image.shape}")
             
             return processed_image
             
@@ -294,6 +287,29 @@ class MultiStageManager(QObject):
             zip_path = self.session.create_session_package()
             if zip_path:
                 self.logger.info(f"数据包已创建: {zip_path}")
+                
+                # 打开包含压缩包的文件夹
+                import os
+                import subprocess
+                import sys
+                
+                try:
+                    folder_path = os.path.dirname(zip_path)
+                    if sys.platform.startswith('win'):
+                        # Windows: 使用explorer打开文件夹并选中压缩包
+                        subprocess.run(['explorer', '/select,', zip_path], check=False)
+                    elif sys.platform.startswith('darwin'):
+                        # macOS: 使用Finder打开文件夹
+                        subprocess.run(['open', '-R', zip_path], check=False)
+                    elif sys.platform.startswith('linux'):
+                        # Linux: 打开文件夹
+                        subprocess.run(['xdg-open', folder_path], check=False)
+                    
+                    self.logger.info(f"已打开文件夹: {folder_path}")
+                    
+                except Exception as e:
+                    self.logger.warning(f"打开文件夹失败: {e}")
+                
                 # 显示成功消息
                 from PyQt5.QtWidgets import QMessageBox
                 QMessageBox.information(
@@ -301,7 +317,8 @@ class MultiStageManager(QObject):
                     "🎉 录制完成",
                     f"眼球数据录制已完成！\n\n"
                     f"数据包已自动创建：\n{zip_path}\n\n"
-                    f"包含 {self.session.recording_count} 张图像"
+                    f"包含 {self.session.recording_count} 张图像\n\n"
+                    f"文件夹已自动打开"
                 )
         
         # 发送完成信号
